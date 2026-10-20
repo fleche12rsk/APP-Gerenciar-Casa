@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Casa conversa com aparelhos da rede local (TV LG em ws://IP:3000, Home Assistant
+  em http://IP:8123, câmeras RTSP), que não têm certificado público. Por isso o
+  tráfego em texto puro é liberado; serviços na internet (Tuya) usam HTTPS.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
