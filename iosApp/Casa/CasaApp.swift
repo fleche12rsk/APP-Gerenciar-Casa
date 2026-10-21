@@ -3,7 +3,8 @@ import Shared
 
 @main
 struct CasaApp: App {
-    var body: some Scene {
+    // "SwiftUI." porque o Kotlin também exporta uma classe Scene (cenas da casa).
+    var body: some SwiftUI.Scene {
         WindowGroup {
             ComposeView()
                 // O Compose cuida das margens seguras (notch, barra inicial, teclado).
