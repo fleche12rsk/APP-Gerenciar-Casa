@@ -16,12 +16,15 @@ object VoiceCommandParser {
         data class Power(val devices: List<Device>, val on: Boolean) : Command
         data class Vacuum(val device: Device, val command: VacuumCommand) : Command
         data class RunScene(val scene: Scene) : Command
+        data object Weather : Command
         data object Unknown : Command
     }
 
     private val offVerbs = listOf("deslig", "apag", "fech", "desativ", "deslique")
     private val onVerbs = listOf("lig", "acend", "acenda", "abr", "ativ")
     private val stopWords = setOf("a", "o", "as", "os", "da", "do", "das", "dos", "de", "na", "no", "em", "e", "por", "favor", "luz", "luzes")
+
+    private val weatherWords = setOf("tempo", "clima", "previsao", "chuva", "guarda", "temperatura", "frio", "calor")
 
     private val kindWords = mapOf(
         DeviceKind.LIGHT to listOf("luz", "luzes", "lampada", "lampadas", "abajur", "lustre", "led"),
@@ -47,6 +50,7 @@ object VoiceCommandParser {
             val targets = matchDevices(phrase, words, devices.filter { it.isOn != null && it.online }, rooms)
             if (targets.isNotEmpty()) return Command.Power(targets, on = isOn)
         }
+        if (words.any { it in weatherWords || it.startsWith("chov") }) return Command.Weather
         matchScene(phrase, scenes)?.let { return Command.RunScene(it) }
         return Command.Unknown
     }

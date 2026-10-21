@@ -2,7 +2,7 @@
 
 App Android para **tablet** (funciona também no celular) que junta todas as marcas da casa
 num painel só, no estilo do Apple Home: luzes, interruptores, tomadas, TV, câmeras,
-aspirador robô, controle infravermelho e Alexa.
+aspirador robô, controle infravermelho, Alexa e previsão do tempo.
 
 | Tablet | Celular |
 | --- | --- |
@@ -18,6 +18,7 @@ aspirador robô, controle infravermelho e Alexa.
 | Câmeras **EZVIZ** e **ICSee** | RTSP direto da câmera, sem nuvem | IP e senha / código de verificação |
 | Aspirador **Eufy** | Home Assistant (integração Eufy RoboVac) | Home Assistant na rede |
 | **Alexa** / Echo Spot | Home Assistant (integração Alexa Media Player) | Home Assistant na rede |
+| Previsão do tempo | [Open-Meteo](https://open-meteo.com) (dados de serviços meteorológicos oficiais) | Só escolher a cidade |
 
 Eufy e Amazon não oferecem acesso aberto aos aparelhos para outros apps. O
 [Home Assistant](https://www.home-assistant.io/) — gratuito, roda num Raspberry Pi,
@@ -31,6 +32,9 @@ Ele é opcional: sem ele, tudo o mais continua funcionando.
   toque e segure abre os detalhes (brilho, comandos do aspirador, nome, cômodo, favorito, ocultar).
 - **Voz**: botão de microfone entende português — “apagar as luzes da sala”, “ligar a cafeteira”,
   “aspirador volta pra base”, “ativar modo cinema”. O que não for da casa vai para a Alexa.
+- **Clima**: temperatura, sensação térmica, condição do céu, umidade, vento com direção, rajadas,
+  chance e volume de chuva, índice UV, pressão, nebulosidade, nascer e pôr do sol, as próximas
+  24 horas e os próximos 7 dias. Aparece resumido na tela inicial e responde a “vai chover hoje?”.
 - **Câmeras**: grade ao vivo (stream reduzido) e tela cheia com som (stream principal).
 - **TV**: liga/desliga, direcional, voltar/início/menu, volume, canais, entradas HDMI e os apps
   instalados na TV com os ícones de verdade.
@@ -67,7 +71,17 @@ keyAlias=casa
 keyPassword=...
 ```
 
+![Previsão do tempo no tablet](docs/tablet-clima.png)
+
 ## Configuração
+
+### Previsão do tempo
+
+Em **Clima** (ou Ajustes › Clima), busque a sua cidade. Não precisa de conta nem chave.
+O app usa o [Open-Meteo](https://open-meteo.com) — gratuito para uso pessoal, com dados de
+institutos meteorológicos nacionais — e atualiza a cada 30 minutos com o app aberto.
+A WeatherKit da Apple e a Weather API do Google exigem conta de desenvolvedor paga ou cobrança
+no cartão, por isso não foram usadas.
 
 ### Smart Life / Tuya (NovaDigital, Intelbras, WAG, controle IR)
 
@@ -106,7 +120,8 @@ fixo para ela no roteador.
 
 O app não tem servidor próprio, conta, anúncios nem coleta de dados. As credenciais ficam só no
 tablet, cifradas com uma chave do Android Keystore, e são enviadas apenas para o serviço a que
-pertencem (Tuya, Home Assistant, TV, câmeras). Câmeras e TV são acessadas direto pela rede local.
+pertencem (Tuya, Home Assistant, TV, câmeras). Para a previsão do tempo, só as coordenadas da
+cidade escolhida são enviadas ao Open-Meteo. Câmeras e TV são acessadas direto pela rede local.
 
 ## Estrutura
 

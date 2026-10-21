@@ -63,7 +63,13 @@ class VoiceCommandParserTest {
         assertEquals("s2", (parse("boa noite") as Command.RunScene).scene.id)
     }
 
+    @Test fun `pergunta sobre o tempo`() {
+        assertEquals(Command.Weather, parse("qual a previsão do tempo amanhã"))
+        assertEquals(Command.Weather, parse("vai chover hoje?"))
+    }
+
     @Test fun `desconhecido segue para a alexa`() {
-        assertEquals(Command.Unknown, parse("qual a previsão do tempo amanhã"))
+        assertEquals(Command.Unknown, parse("que horas são"))
+        assertEquals(Command.Unknown, parse("tocar música relaxante"))
     }
 }

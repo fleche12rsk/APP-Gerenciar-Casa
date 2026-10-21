@@ -8,6 +8,7 @@ data class AppConfig(
     val tv: LgTvConfig? = null,
     val homeAssistant: HaConfig? = null,
     val cameras: List<CameraConfig> = emptyList(),
+    val weather: WeatherPlace? = null,
     val overrides: Map<String, DeviceOverride> = emptyMap(),
     val rooms: List<String> = listOf("Sala", "Cozinha", "Quarto", "Escritório", "Área externa"),
     val keepScreenOn: Boolean = true,
@@ -70,4 +71,12 @@ data class DeviceOverride(
     val room: String? = null,
     val hidden: Boolean = false,
     val favorite: Boolean = false,
+)
+
+@Serializable
+data class WeatherPlace(
+    val name: String,
+    val region: String? = null,
+    val latitude: Double,
+    val longitude: Double,
 )

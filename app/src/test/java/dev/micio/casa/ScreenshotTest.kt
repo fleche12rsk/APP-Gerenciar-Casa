@@ -10,7 +10,10 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import com.github.takahirom.roborazzi.captureRoboImage
+import dev.micio.casa.core.WeatherPlace
+import dev.micio.casa.home.WeatherState
 import dev.micio.casa.integrations.DeviceProvider
+import dev.micio.casa.integrations.weather.OpenMeteo
 import dev.micio.casa.integrations.ProviderSnapshot
 import dev.micio.casa.model.Device
 import dev.micio.casa.model.DeviceAction
@@ -68,7 +71,13 @@ class ScreenshotTest {
         val app = ApplicationProvider.getApplicationContext<CasaApp>()
         if (demo) app.home.attachForTest(DemoProvider())
         app.home.refreshAll()
-        val vm = MainViewModel(app.config, app.home)
+        if (demo) app.weather.setForTest(
+            WeatherState(
+                place = WeatherPlace("São Paulo", "São Paulo, Brasil", -23.55, -46.63),
+                weather = OpenMeteo.parseForecast(javaClass.getResource("/open-meteo-forecast.json")!!.readText()),
+            )
+        )
+        val vm = MainViewModel(app.config, app.home, app.weather)
         compose.setContent {
             CasaTheme { CasaRoot(vm, WindowSizeClass.calculateFromSize(DpSize(width.dp, height.dp))) }
         }
@@ -94,6 +103,16 @@ class ScreenshotTest {
     @Config(qualifiers = "w1280dp-h800dp-land-mdpi")
     @Test fun tabletAlexa() = render(1280, 800, demo = false, name = "tablet_alexa") {
         compose.onNodeWithText("Alexa").performClick()
+    }
+
+    @Config(qualifiers = "w1280dp-h800dp-land-mdpi")
+    @Test fun tabletWeather() = render(1280, 800, demo = true, name = "tablet_weather") {
+        compose.onNodeWithText("Clima").performClick()
+    }
+
+    @Config(qualifiers = "w411dp-h891dp-mdpi")
+    @Test fun phoneWeather() = render(411, 891, demo = true, name = "phone_weather") {
+        compose.onNodeWithText("Parcialmente nublado").performClick()
     }
 
     @Config(qualifiers = "w411dp-h891dp-mdpi")

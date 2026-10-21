@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -82,7 +83,9 @@ fun HomeScreen(
     wide: Boolean,
     onOpenDevice: (Device) -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenWeather: () -> Unit,
 ) {
+    val weather by vm.weather.state.collectAsStateWithLifecycle()
     val devices by vm.home.devices.collectAsStateWithLifecycle()
     val scenes by vm.home.scenes.collectAsStateWithLifecycle()
     val errors by vm.home.errors.collectAsStateWithLifecycle()
@@ -108,7 +111,9 @@ fun HomeScreen(
         modifier = Modifier.fillMaxSize(),
     ) {
         fullWidth("header") {
-            Header(devices, wide, loading, onRefresh = vm.home::refreshAll)
+            Header(devices, wide, loading, onRefresh = vm.home::refreshAll) {
+                WeatherBadge(weather, onClick = onOpenWeather)
+            }
         }
 
         if (errors.isNotEmpty()) {
@@ -192,7 +197,7 @@ private fun LazyGridScope.fullWidth(key: String, content: @Composable () -> Unit
 }
 
 @Composable
-private fun Header(devices: List<Device>, wide: Boolean, loading: Boolean, onRefresh: () -> Unit) {
+private fun Header(devices: List<Device>, wide: Boolean, loading: Boolean, onRefresh: () -> Unit, weather: @Composable () -> Unit) {
     val now by produceState(LocalDateTime.now()) {
         while (true) {
             value = LocalDateTime.now()
@@ -221,6 +226,8 @@ private fun Header(devices: List<Device>, wide: Boolean, loading: Boolean, onRef
                 )
             }
             if (wide) {
+                weather()
+                Spacer(Modifier.width(28.dp))
                 Text(now.format(DateTimeFormatter.ofPattern("HH:mm")), style = MaterialTheme.typography.displayLarge, color = Palette.Ivory)
             }
             IconButton(onClick = onRefresh) {
@@ -233,6 +240,10 @@ private fun Header(devices: List<Device>, wide: Boolean, loading: Boolean, onRef
                 color = Palette.Ember,
                 trackColor = Color.Transparent,
             )
+        }
+        if (!wide) {
+            Spacer(Modifier.height(16.dp))
+            weather()
         }
         Spacer(Modifier.height(16.dp))
         SummaryRow(devices)

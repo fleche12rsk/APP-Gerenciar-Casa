@@ -30,7 +30,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val vm: MainViewModel = viewModel(factory = viewModelFactory {
-                initializer { MainViewModel(app.config, app.home) }
+                initializer { MainViewModel(app.config, app.home, app.weather) }
             })
             val config by vm.config.config.collectAsStateWithLifecycle()
             val view = LocalView.current
@@ -60,10 +60,12 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         app.home.setActive(true)
+        app.weather.setActive(true)
     }
 
     override fun onStop() {
         super.onStop()
         app.home.setActive(false)
+        app.weather.setActive(false)
     }
 }

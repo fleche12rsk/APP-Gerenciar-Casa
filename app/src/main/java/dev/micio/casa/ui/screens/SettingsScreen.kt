@@ -36,6 +36,7 @@ import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material.icons.rounded.Videocam
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.WbIncandescent
+import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
@@ -77,6 +78,7 @@ import dev.micio.casa.core.HaConfig
 import dev.micio.casa.core.LgTvConfig
 import dev.micio.casa.core.TuyaConfig
 import dev.micio.casa.core.TuyaRegion
+import dev.micio.casa.core.WeatherPlace
 import dev.micio.casa.integrations.camera.CameraTemplates
 import dev.micio.casa.integrations.lg.LgTvProvider
 import dev.micio.casa.integrations.lg.WebOsClient
@@ -117,6 +119,9 @@ fun SettingsScreen(vm: MainViewModel, wide: Boolean, onOpenDevice: (Device) -> U
         item {
             HomeAssistantCard(vm, config.homeAssistant, errors[Source.HOME_ASSISTANT], allDevices.count { it.source == Source.HOME_ASSISTANT }, column)
         }
+
+        item { SectionTitle("Clima", column) }
+        item { WeatherCard(vm, config.weather, column) }
 
         item { SectionTitle("Câmeras", column) }
         item { CamerasCard(vm, config.cameras, config.rooms, column) }
@@ -277,6 +282,26 @@ private fun statusText(configured: Boolean, error: String?, okText: String) = wh
     !configured -> "Não conectado"
     error != null -> error
     else -> "Conectado · $okText"
+}
+
+// ---------- Clima ----------
+
+@Composable
+private fun WeatherCard(vm: MainViewModel, place: WeatherPlace?, modifier: Modifier) {
+    IntegrationCard(
+        icon = Icons.Rounded.WbSunny,
+        accent = Palette.Ember,
+        title = "Previsão do tempo",
+        brands = "Temperatura, chuva, umidade, vento e UV · Open-Meteo, grátis e sem cadastro",
+        status = place?.let { listOfNotNull(it.name, it.region).joinToString(", ") } ?: "Nenhuma cidade escolhida",
+        healthy = place != null,
+        modifier = modifier,
+    ) {
+        CityPicker(vm, onPick = { picked -> vm.updateConfig { it.copy(weather = picked) } })
+        if (place != null) {
+            TextButton(onClick = { vm.updateConfig { it.copy(weather = null) } }) { Text("Remover previsão", color = Palette.Coral) }
+        }
+    }
 }
 
 // ---------- Câmeras ----------

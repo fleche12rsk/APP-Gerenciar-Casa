@@ -34,6 +34,7 @@ import androidx.compose.material.icons.rounded.SettingsRemote
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material.icons.rounded.Videocam
+import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -77,10 +78,13 @@ import dev.micio.casa.ui.screens.HomeScreen
 import dev.micio.casa.ui.screens.RemotesScreen
 import dev.micio.casa.ui.screens.SettingsScreen
 import dev.micio.casa.ui.screens.TvScreen
+import dev.micio.casa.ui.screens.WeatherScreen
 import dev.micio.casa.ui.theme.Palette
 
-enum class Destination(val label: String, val icon: ImageVector) {
+/** [inBottomBar] = false: no celular a tela é aberta por outro lugar (ex.: selo do clima no Início). */
+enum class Destination(val label: String, val icon: ImageVector, val inBottomBar: Boolean = true) {
     HOME("Início", Icons.Rounded.Home),
+    WEATHER("Clima", Icons.Rounded.WbSunny, inBottomBar = false),
     CAMERAS("Câmeras", Icons.Rounded.Videocam),
     TV("TV", Icons.Rounded.Tv),
     REMOTES("Controles", Icons.Rounded.SettingsRemote),
@@ -141,7 +145,7 @@ fun CasaRoot(vm: MainViewModel, windowSize: WindowSizeClass) {
             bottomBar = {
                 if (!wide) {
                     NavigationBar(containerColor = Palette.Night.copy(alpha = 0.92f)) {
-                        Destination.entries.forEach { item ->
+                        Destination.entries.filter { it.inBottomBar }.forEach { item ->
                             NavigationBarItem(
                                 selected = destination == item,
                                 onClick = { destination = item },
@@ -172,7 +176,12 @@ fun CasaRoot(vm: MainViewModel, windowSize: WindowSizeClass) {
                 label = "destination",
             ) { target ->
                 when (target) {
-                    Destination.HOME -> HomeScreen(vm, wide, openDevice, onOpenSettings = { destination = Destination.SETTINGS })
+                    Destination.HOME -> HomeScreen(
+                        vm, wide, openDevice,
+                        onOpenSettings = { destination = Destination.SETTINGS },
+                        onOpenWeather = { destination = Destination.WEATHER },
+                    )
+                    Destination.WEATHER -> WeatherScreen(vm, wide)
                     Destination.CAMERAS -> CamerasScreen(vm, wide, onOpenSettings = { destination = Destination.SETTINGS })
                     Destination.TV -> TvScreen(vm, wide, onOpenSettings = { destination = Destination.SETTINGS })
                     Destination.REMOTES -> RemotesScreen(vm, onOpenSettings = { destination = Destination.SETTINGS })
