@@ -8,7 +8,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.time.Instant
+import kotlinx.datetime.Instant
+import kotlin.time.Duration.Companion.hours
 
 /** Usa respostas reais da API da Defesa Civil de Rio do Sul (21/10/2026). */
 class RiverMonitorTest {
@@ -48,7 +49,7 @@ class RiverMonitorTest {
 
     @Test fun `tendencia de subida`() {
         val reference = stations.first().copy(levelM = 3.40, readingAt = Instant.parse("2026-10-21T12:00:00Z"))
-        val history = (0..6).map { h -> LevelPoint(Instant.parse("2026-10-21T06:00:00Z").plusSeconds(h * 3600L), 3.0 + h * 0.03) }
+        val history = (0..6).map { h -> LevelPoint(Instant.parse("2026-10-21T06:00:00Z") + h.hours, 3.0 + h * 0.03) }
         val report = RiverReport(listOf(reference) + stations.drop(1), history)
         assertEquals(Trend.RISING, report.trend)
         assertTrue(report.centimetersPerHour!! > 2)

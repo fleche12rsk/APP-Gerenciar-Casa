@@ -1,6 +1,6 @@
 # Casa
 
-App Android para **tablet** (funciona também no celular) que junta todas as marcas da casa
+App para **tablet Android e iPad** (funciona também em celulares e iPhone) que junta todas as marcas da casa
 num painel só, no estilo do Apple Home: luzes, interruptores, tomadas, TV, câmeras,
 aspirador robô, controle infravermelho, Alexa, previsão do tempo e nível dos rios.
 
@@ -52,15 +52,44 @@ Ele é opcional: sem ele, tudo o mais continua funcionando.
 - **Alexa**: comando por voz ou texto executado pelo Echo, anúncios, fala, “tocando agora” e volume.
 - **Modo tablet de parede**: tela sempre ligada e tela cheia opcionais.
 
-## Instalação
+## Instalação no Android
 
-1. Baixe o `app-release.apk` (aba **Actions** do GitHub › última execução › *casa-apk*, ou gere
-   localmente, abaixo).
+1. Baixe o `app-release.apk` (aba **Actions** do GitHub › workflow *APK* › última execução ›
+   *casa-apk*, ou gere localmente, abaixo).
 2. No tablet, abra o arquivo e permita “instalar apps desconhecidos” para o navegador ou gerenciador
    de arquivos.
 3. Abra **Casa › Ajustes** e conecte as integrações. Cada uma tem um “Como configurar” passo a passo.
 
 Requer Android 8.0 ou mais novo.
+
+## Instalação no iPhone e iPad
+
+O app iOS é gerado num Mac do próprio GitHub: aba **Actions** › workflow *IPA (iOS)* ›
+última execução › artefato *casa-ipa* (um zip com o `Casa.ipa`). Para gerar de novo, use
+**Run workflow** nessa mesma tela.
+
+Sem conta de desenvolvedor paga, a instalação é feita pelo computador:
+
+1. Instale o [Sideloadly](https://sideloadly.io) (Windows ou Mac) ou o [AltStore](https://altstore.io).
+2. Conecte o iPhone/iPad por cabo, arraste o `Casa.ipa` para o Sideloadly, entre com o seu Apple ID
+   e toque em *Start*.
+3. No aparelho: *Ajustes › Geral › VPN e Gerenciamento de Dispositivo* › confie no seu Apple ID.
+   No iOS 16 ou mais novo, ative também *Ajustes › Privacidade e Segurança › Modo de Desenvolvedor*.
+4. Na primeira abertura, permita o acesso à **rede local** — é por ela que o app fala com a TV,
+   as câmeras e o Home Assistant.
+
+Com Apple ID gratuito a instalação vale **7 dias** (o Sideloadly e o AltStore renovam). Com a conta
+de desenvolvedor da Apple (US$ 99/ano) vale 1 ano e permite publicar na App Store.
+
+Diferenças no iOS:
+
+- **Voz**: o microfone abre um campo de comando; toque no microfone do teclado para ditar.
+- **Ligar a TV pela rede**: o iOS bloqueia o sinal de Wake-on-LAN para apps sem uma permissão
+  especial da Apple. Ligue pelo controle, pelo hub infravermelho ou pela Alexa; o resto do controle
+  da TV funciona.
+- **Câmeras**: o vídeo ao vivo usa o VLC; a última imagem das câmeras em repouso não é guardada.
+
+Requer iOS 15 ou mais novo.
 
 ### Gerar o APK localmente
 
@@ -131,18 +160,27 @@ fixo para ela no roteador.
 ## Privacidade
 
 O app não tem servidor próprio, conta, anúncios nem coleta de dados. As credenciais ficam só no
-tablet, cifradas com uma chave do Android Keystore, e são enviadas apenas para o serviço a que
+aparelho — no Android cifradas com uma chave do Android Keystore, no iOS num arquivo com a proteção
+de dados do sistema — e são enviadas apenas para o serviço a que
 pertencem (Tuya, Home Assistant, TV, câmeras). Para a previsão do tempo, só as coordenadas da
 cidade escolhida são enviadas ao Open-Meteo. Câmeras e TV são acessadas direto pela rede local.
 
 ## Estrutura
 
+O código é um só para Android e iOS ([Kotlin Multiplatform](https://kotlinlang.org/docs/multiplatform.html)
+com [Compose Multiplatform](https://www.jetbrains.com/compose-multiplatform/)):
+
 ```
-app/src/main/java/dev/micio/casa/
-├── core/            configuração cifrada e HTTP
-├── integrations/    tuya/, lg/, ha/, camera/ — cada marca traduzida para o mesmo modelo
-├── home/            HomeRepository (junta tudo) e o interpretador de voz
-└── ui/              tema, componentes e telas em Jetpack Compose
+shared/src/
+├── commonMain/      telas, integrações e regras — 100% compartilhado
+│   ├── core/        configuração, rede (Ktor), formatação, SHA-256/HMAC
+│   ├── integrations/  tuya/, lg/, ha/, camera/, weather/, river/
+│   ├── home/        HomeRepository (junta tudo), clima, rio, interpretador de voz
+│   └── ui/          tema, componentes e telas
+├── androidMain/     ExoPlayer, Android Keystore, voz do Google, Wake-on-LAN
+└── iosMain/         ponte com o VLC, armazenamento protegido, entrada do app
+app/                 app Android (Activity, ícone, testes e capturas de tela)
+iosApp/              app iOS (SwiftUI + VLC), gerado pelo XcodeGen
 ```
 
 Para incluir uma nova marca, implemente `DeviceProvider` e registre-a no `HomeRepository`.

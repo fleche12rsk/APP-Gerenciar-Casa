@@ -1,0 +1,8 @@
+# Gerados no build (xcodegen / pod install / xcodebuild)
+*.xcodeproj/
+*.xcworkspace/
+Pods/
+Podfile.lock
+build/
+Payload/
+*.ipa

@@ -1,13 +1,9 @@
 package dev.micio.casa
 
-import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
-import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.unit.DpSize
-import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.micio.casa.core.CameraBrand
@@ -28,7 +24,6 @@ import dev.micio.casa.model.DeviceKind
 import dev.micio.casa.model.Scene
 import dev.micio.casa.model.Source
 import dev.micio.casa.ui.CasaRoot
-import dev.micio.casa.ui.MainViewModel
 import dev.micio.casa.ui.theme.CasaTheme
 import org.junit.Rule
 import org.junit.Test
@@ -73,23 +68,22 @@ class ScreenshotTest {
         override suspend fun execute(device: Device, action: DeviceAction) = Unit
     }
 
-    @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     private fun render(width: Int, height: Int, demo: Boolean, name: String, action: (() -> Unit)? = null) {
         val app = ApplicationProvider.getApplicationContext<CasaApp>()
-        if (demo) app.home.attachForTest(DemoProvider())
-        app.home.refreshAll()
-        if (demo) app.weather.setForTest(
+        val c = app.container
+        if (demo) c.home.attachForTest(DemoProvider())
+        c.home.refreshAll()
+        if (demo) c.weather.setForTest(
             WeatherState(
                 place = WeatherPlace("São Paulo", "São Paulo, Brasil", -23.55, -46.63),
                 weather = OpenMeteo.parseForecast(javaClass.getResource("/open-meteo-forecast.json")!!.readText()),
             )
         )
-        app.river.setForTest(if (demo) RiverState(RiverCity(4214805, "Rio do Sul", "SC"), riverSample()) else RiverState())
-        val vm = MainViewModel(app.config, app.home, app.weather, app.river)
+        c.river.setForTest(if (demo) RiverState(RiverCity(4214805, "Rio do Sul", "SC"), riverSample()) else RiverState())
         compose.setContent {
-            CasaTheme { CasaRoot(vm, WindowSizeClass.calculateFromSize(DpSize(width.dp, height.dp))) }
+            CasaTheme { CasaRoot(c.viewModel) }
         }
-        compose.waitUntil(5_000) { !demo || app.home.devices.value.isNotEmpty() }
+        compose.waitUntil(5_000) { !demo || c.home.devices.value.isNotEmpty() }
         compose.waitForIdle()
         action?.invoke()
         compose.waitForIdle()
@@ -122,7 +116,7 @@ class ScreenshotTest {
     @Config(qualifiers = "w1280dp-h800dp-land-mdpi")
     @Test fun tabletCameras() {
         val app = ApplicationProvider.getApplicationContext<CasaApp>()
-        app.config.update { c ->
+        app.container.config.update { c ->
             c.copy(cameras = listOf(
                 CameraConfig("a", "Portão", CameraBrand.ICSEE, "rtsp://192.0.2.1/x", room = "Área externa", power = CameraPower.ON_DEMAND),
                 CameraConfig("b", "Quintal", CameraBrand.ICSEE, "rtsp://192.0.2.2/x", room = "Área externa", power = CameraPower.ON_DEMAND),
