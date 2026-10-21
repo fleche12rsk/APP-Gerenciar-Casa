@@ -17,6 +17,7 @@ object VoiceCommandParser {
         data class Vacuum(val device: Device, val command: VacuumCommand) : Command
         data class RunScene(val scene: Scene) : Command
         data object Weather : Command
+        data object River : Command
         data object Unknown : Command
     }
 
@@ -50,6 +51,7 @@ object VoiceCommandParser {
             val targets = matchDevices(phrase, words, devices.filter { it.isOn != null && it.online }, rooms)
             if (targets.isNotEmpty()) return Command.Power(targets, on = isOn)
         }
+        if (words.any { it == "rio" || it == "enchente" || it == "cheia" }) return Command.River
         if (words.any { it in weatherWords || it.startsWith("chov") }) return Command.Weather
         matchScene(phrase, scenes)?.let { return Command.RunScene(it) }
         return Command.Unknown

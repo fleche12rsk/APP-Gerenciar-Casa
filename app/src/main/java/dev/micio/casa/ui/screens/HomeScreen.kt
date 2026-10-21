@@ -65,6 +65,7 @@ import dev.micio.casa.model.DeviceKind
 import dev.micio.casa.ui.MainViewModel
 import dev.micio.casa.ui.components.DeviceTile
 import dev.micio.casa.ui.components.EmptyState
+import dev.micio.casa.ui.components.RiverCard
 import dev.micio.casa.ui.components.SceneCard
 import dev.micio.casa.ui.components.SectionTitle
 import dev.micio.casa.ui.components.statusLine
@@ -86,6 +87,7 @@ fun HomeScreen(
     onOpenWeather: () -> Unit,
 ) {
     val weather by vm.weather.state.collectAsStateWithLifecycle()
+    val river by vm.river.state.collectAsStateWithLifecycle()
     val devices by vm.home.devices.collectAsStateWithLifecycle()
     val scenes by vm.home.scenes.collectAsStateWithLifecycle()
     val errors by vm.home.errors.collectAsStateWithLifecycle()
@@ -114,6 +116,10 @@ fun HomeScreen(
             Header(devices, wide, loading, onRefresh = vm.home::refreshAll) {
                 WeatherBadge(weather, onClick = onOpenWeather)
             }
+        }
+
+        if (river.enabled) {
+            fullWidth("river") { RiverCard(river, wide, Modifier.padding(top = 8.dp)) }
         }
 
         if (errors.isNotEmpty()) {

@@ -10,6 +10,7 @@
             <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
         </intent>
         <package android:name="com.amazon.dee.app" />
+        <package android:name="com.xm.csee" />
     </queries>
 
     <application

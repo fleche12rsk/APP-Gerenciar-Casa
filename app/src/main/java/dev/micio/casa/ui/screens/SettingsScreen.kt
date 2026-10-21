@@ -37,6 +37,9 @@ import androidx.compose.material.icons.rounded.Videocam
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.WbIncandescent
 import androidx.compose.material.icons.rounded.WbSunny
+import androidx.compose.material.icons.rounded.Water
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.remember
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
@@ -74,6 +77,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.micio.casa.core.CameraBrand
 import dev.micio.casa.core.CameraConfig
+import dev.micio.casa.core.CameraPower
+import dev.micio.casa.core.RiverCity
 import dev.micio.casa.core.HaConfig
 import dev.micio.casa.core.LgTvConfig
 import dev.micio.casa.core.TuyaConfig
@@ -122,6 +127,7 @@ fun SettingsScreen(vm: MainViewModel, wide: Boolean, onOpenDevice: (Device) -> U
 
         item { SectionTitle("Clima", column) }
         item { WeatherCard(vm, config.weather, column) }
+        item { RiverSettingsCard(vm, config.river, column) }
 
         item { SectionTitle("Câmeras", column) }
         item { CamerasCard(vm, config.cameras, config.rooms, column) }
@@ -297,9 +303,65 @@ private fun WeatherCard(vm: MainViewModel, place: WeatherPlace?, modifier: Modif
         healthy = place != null,
         modifier = modifier,
     ) {
-        CityPicker(vm, onPick = { picked -> vm.updateConfig { it.copy(weather = picked) } })
+        CityPicker(vm, onPick = { picked ->
+            vm.updateConfig { it.copy(weather = picked) }
+            vm.river.suggestFor(picked)
+        })
         if (place != null) {
             TextButton(onClick = { vm.updateConfig { it.copy(weather = null) } }) { Text("Remover previsão", color = Palette.Coral) }
+        }
+    }
+}
+
+/** Nível dos rios: só para cidades cuja Defesa Civil publica o painel. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun RiverSettingsCard(vm: MainViewModel, current: RiverCity?, modifier: Modifier) {
+    IntegrationCard(
+        icon = Icons.Rounded.Water,
+        accent = Palette.Sky,
+        title = "Nível do rio",
+        brands = "Medições ao vivo da Defesa Civil municipal (painel Asthon)",
+        status = current?.let { listOfNotNull(it.name, it.state).joinToString(" - ") } ?: "Desligado",
+        healthy = current != null,
+        modifier = modifier,
+    ) {
+        var cities by remember { mutableStateOf<List<RiverCity>?>(null) }
+        var failure by remember { mutableStateOf<String?>(null) }
+        LaunchedEffect(Unit) {
+            runCatching { vm.river.cities() }
+                .onSuccess { cities = it }
+                .onFailure { failure = it.message ?: "Não foi possível carregar as cidades"; cities = emptyList() }
+        }
+        Text(
+            "Disponível nas cidades abaixo. Escolhendo uma delas na previsão do tempo, o rio já aparece sozinho.",
+            color = Palette.Mist,
+            style = MaterialTheme.typography.bodySmall,
+        )
+        when (val list = cities) {
+            null -> CircularProgressIndicator(color = Palette.Ember, modifier = Modifier.padding(16.dp).size(24.dp))
+            else -> if (list.isEmpty()) {
+                Text(failure ?: "Nenhuma cidade disponível.", color = Palette.Mist, modifier = Modifier.padding(top = 8.dp))
+            } else {
+                FlowRow(
+                    Modifier.padding(top = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    list.forEach { city ->
+                        FilterChip(
+                            selected = city.id == current?.id,
+                            onClick = { vm.updateConfig { it.copy(river = city) } },
+                            label = { Text(listOfNotNull(city.name, city.state).joinToString(" - ")) },
+                            shape = RoundedCornerShape(50),
+                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Palette.Ivory, selectedLabelColor = Palette.Ink, labelColor = Palette.Ivory),
+                        )
+                    }
+                }
+            }
+        }
+        if (current != null) {
+            TextButton(onClick = { vm.updateConfig { it.copy(river = null) } }) { Text("Desligar", color = Palette.Coral) }
         }
     }
 }
@@ -315,14 +377,31 @@ private fun CamerasCard(vm: MainViewModel, cameras: List<CameraConfig>, rooms: L
             Text("Nenhuma câmera adicionada.", color = Palette.Mist)
         }
         cameras.forEach { camera ->
-            Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            var editing by rememberSaveable(camera.id) { mutableStateOf(false) }
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable(role = Role.Button, onClickLabel = "Ajustar ${camera.name}") { editing = !editing }
+                    .padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 IconBadge(Icons.Rounded.Videocam, Palette.Coral)
                 Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
                     Text(camera.name, color = Palette.Ivory, style = MaterialTheme.typography.titleSmall)
-                    Text(listOfNotNull(camera.brand.label, camera.room).joinToString(" · "), color = Palette.Mist, style = MaterialTheme.typography.bodySmall)
+                    Text(listOfNotNull(camera.brand.label, camera.room, camera.power.label).joinToString(" · "), color = Palette.Mist, style = MaterialTheme.typography.bodySmall)
                 }
                 IconButton(onClick = { vm.updateConfig { c -> c.copy(cameras = c.cameras - camera) } }) {
                     Icon(Icons.Rounded.Delete, contentDescription = "Remover ${camera.name}", tint = Palette.Mist)
+                }
+            }
+            AnimatedVisibility(editing, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                Column(Modifier.padding(start = 58.dp, bottom = 12.dp)) {
+                    PowerOptions(camera.power, camera.autoStopSeconds) { power, seconds ->
+                        vm.updateConfig { c ->
+                            c.copy(cameras = c.cameras.map { if (it.id == camera.id) it.copy(power = power, autoStopSeconds = seconds) else it })
+                        }
+                    }
                 }
             }
         }
@@ -350,6 +429,8 @@ private fun AddCameraForm(rooms: List<String>, onCancel: () -> Unit, onSave: (Ca
     var room by rememberSaveable { mutableStateOf<String?>(null) }
     var customUrl by rememberSaveable { mutableStateOf("") }
     var advanced by rememberSaveable { mutableStateOf(false) }
+    var power by rememberSaveable { mutableStateOf(CameraPower.ALWAYS) }
+    var autoStop by rememberSaveable { mutableStateOf(60) }
 
     val generated = if (host.isBlank()) null else CameraTemplates.build(brand, host, user, password)
     LaunchedEffect(generated?.main) { if (!advanced) customUrl = generated?.main.orEmpty() }
@@ -372,6 +453,8 @@ private fun AddCameraForm(rooms: List<String>, onCancel: () -> Unit, onSave: (Ca
         Label("Cômodo")
         ChoiceChips(listOf<String?>(null) + rooms, room, { it ?: "Nenhum" }) { room = it }
 
+        PowerOptions(power, autoStop) { p, seconds -> power = p; autoStop = seconds }
+
         TextButton(onClick = { advanced = !advanced }) {
             Text(if (advanced) "Usar endereço automático" else "Editar endereço RTSP", color = Palette.Mist)
         }
@@ -380,7 +463,7 @@ private fun AddCameraForm(rooms: List<String>, onCancel: () -> Unit, onSave: (Ca
         Text(
             when (brand) {
                 CameraBrand.EZVIZ -> "Se a imagem não abrir: no app EZVIZ, desative a “Criptografia de imagem” da câmera. Alternativa de endereço: rtsp://admin:CÓDIGO@IP:554/H.264"
-                CameraBrand.ICSEE -> "Câmeras ICSee/XMEye usam a porta 554. O stream reduzido é usado na grade e o principal ao ampliar."
+                CameraBrand.ICSEE -> "Câmeras ICSee/XMEye usam a porta 554. Modelos solares/bateria dormem para poupar energia e muitos não aceitam RTSP: se não abrirem, use o botão “Abrir no app iCSee”."
                 CameraBrand.GENERIC -> "Use o endereço RTSP indicado no manual ou no app da câmera (ONVIF)."
             },
             color = Palette.Mist,
@@ -398,12 +481,26 @@ private fun AddCameraForm(rooms: List<String>, onCancel: () -> Unit, onSave: (Ca
                         url = customUrl.trim(),
                         subUrl = generated?.sub.takeIf { !advanced },
                         room = room,
+                        power = power,
+                        autoStopSeconds = autoStop,
                     ))
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = Palette.Ivory, contentColor = Palette.Ink),
             ) { Text("Salvar câmera") }
             TextButton(onClick = onCancel) { Text("Cancelar", color = Palette.Mist) }
         }
+    }
+}
+
+/** Modo de energia: essencial para câmeras solares/bateria, que gastam enquanto transmitem. */
+@Composable
+private fun PowerOptions(power: CameraPower, autoStopSeconds: Int, onChange: (CameraPower, Int) -> Unit) {
+    Label("Transmissão")
+    ChoiceChips(CameraPower.entries, power, { it.label }) { onChange(it, autoStopSeconds) }
+    Text(power.description, color = Palette.Mist, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
+    if (power != CameraPower.ALWAYS) {
+        Label("Ao tocar, manter ao vivo por")
+        ChoiceChips(listOf(30, 60, 120, 300), autoStopSeconds, { if (it < 60) "$it s" else "${it / 60} min" }) { onChange(power, it) }
     }
 }
 

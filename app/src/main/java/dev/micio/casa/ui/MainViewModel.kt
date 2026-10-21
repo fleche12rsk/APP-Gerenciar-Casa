@@ -6,8 +6,11 @@ import dev.micio.casa.core.ConfigRepository
 import dev.micio.casa.core.DeviceOverride
 import dev.micio.casa.home.HomeRepository
 import dev.micio.casa.home.VoiceCommandParser
+import dev.micio.casa.home.RiverRepository
 import dev.micio.casa.home.WeatherRepository
+import dev.micio.casa.integrations.river.Trend
 import dev.micio.casa.integrations.weather.WeatherCodes
+import dev.micio.casa.ui.components.meters
 import dev.micio.casa.home.VoiceCommandParser.Command
 import dev.micio.casa.model.Device
 import dev.micio.casa.model.DeviceAction
@@ -17,6 +20,7 @@ class MainViewModel(
     val config: ConfigRepository,
     val home: HomeRepository,
     val weather: WeatherRepository,
+    val river: RiverRepository,
 ) : ViewModel() {
 
     fun toggle(device: Device) {
@@ -50,6 +54,7 @@ class MainViewModel(
                 })
             }
             is Command.RunScene -> home.runScene(command.scene)
+            Command.River -> riverSummary()?.let(home::notify) ?: home.notify("Nível do rio indisponível no momento.")
             Command.Weather -> weatherSummary()?.let(home::notify) ?: sendToAlexa(text) ?: home.notify("Escolha a sua cidade na aba Clima.")
             Command.Unknown -> sendToAlexa(text) ?: home.notify("Não entendi “$text”.")
         }
@@ -66,6 +71,18 @@ class MainViewModel(
             today?.precipitationProbability?.let { append(", %d%% de chance de chuva".format(it)) }
             append(".")
         }
+    }
+
+    fun riverSummary(): String? {
+        val report = river.state.value.report ?: return null
+        val station = report.reference ?: return null
+        val level = station.levelM ?: return null
+        val trend = when (report.trend) {
+            Trend.RISING -> ", subindo"
+            Trend.FALLING -> ", baixando"
+            Trend.STEADY -> ", estável"
+        }
+        return "${station.river ?: "Rio"}: ${meters(level)} na ${station.name} — ${station.bandLabel.lowercase()}$trend."
     }
 
     /** Devolve null quando não há Echo configurado. */

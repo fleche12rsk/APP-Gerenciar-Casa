@@ -10,7 +10,14 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import com.github.takahirom.roborazzi.captureRoboImage
+import dev.micio.casa.core.CameraBrand
+import dev.micio.casa.core.CameraConfig
+import dev.micio.casa.core.CameraPower
+import dev.micio.casa.core.RiverCity
 import dev.micio.casa.core.WeatherPlace
+import dev.micio.casa.home.RiverState
+import dev.micio.casa.integrations.river.RiverMonitor
+import dev.micio.casa.integrations.river.RiverReport
 import dev.micio.casa.home.WeatherState
 import dev.micio.casa.integrations.DeviceProvider
 import dev.micio.casa.integrations.weather.OpenMeteo
@@ -77,7 +84,8 @@ class ScreenshotTest {
                 weather = OpenMeteo.parseForecast(javaClass.getResource("/open-meteo-forecast.json")!!.readText()),
             )
         )
-        val vm = MainViewModel(app.config, app.home, app.weather)
+        app.river.setForTest(if (demo) RiverState(RiverCity(4214805, "Rio do Sul", "SC"), riverSample()) else RiverState())
+        val vm = MainViewModel(app.config, app.home, app.weather, app.river)
         compose.setContent {
             CasaTheme { CasaRoot(vm, WindowSizeClass.calculateFromSize(DpSize(width.dp, height.dp))) }
         }
@@ -103,6 +111,27 @@ class ScreenshotTest {
     @Config(qualifiers = "w1280dp-h800dp-land-mdpi")
     @Test fun tabletAlexa() = render(1280, 800, demo = false, name = "tablet_alexa") {
         compose.onNodeWithText("Alexa").performClick()
+    }
+
+    private fun riverSample(): RiverReport {
+        fun read(name: String) = javaClass.getResource(name)!!.readText()
+        val stations = RiverMonitor.merge(RiverMonitor.parseStationList(read("/rio-stations.json")), RiverMonitor.parsePanel(read("/rio-panel.json")))
+        return RiverReport(stations, RiverMonitor.parseHistory(read("/rio-history.json")))
+    }
+
+    @Config(qualifiers = "w1280dp-h800dp-land-mdpi")
+    @Test fun tabletCameras() {
+        val app = ApplicationProvider.getApplicationContext<CasaApp>()
+        app.config.update { c ->
+            c.copy(cameras = listOf(
+                CameraConfig("a", "Portão", CameraBrand.ICSEE, "rtsp://192.0.2.1/x", room = "Área externa", power = CameraPower.ON_DEMAND),
+                CameraConfig("b", "Quintal", CameraBrand.ICSEE, "rtsp://192.0.2.2/x", room = "Área externa", power = CameraPower.ON_DEMAND),
+                CameraConfig("c", "Garagem", CameraBrand.ICSEE, "rtsp://192.0.2.3/x", power = CameraPower.ON_DEMAND),
+            ))
+        }
+        render(1280, 800, demo = true, name = "tablet_cameras") {
+            compose.onNodeWithText("Câmeras").performClick()
+        }
     }
 
     @Config(qualifiers = "w1280dp-h800dp-land-mdpi")

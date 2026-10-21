@@ -20,7 +20,8 @@ class ConfigRepository(context: Context) {
         val next = transform(_config.value)
         if (next == _config.value) return
         _config.value = next
-        store.write(Http.json.encodeToString(next))
+        // Se o Keystore falhar, a mudança vale até fechar o app em vez de derrubá-lo.
+        runCatching { store.write(Http.json.encodeToString(next)) }
     }
 
     private fun load(): AppConfig =

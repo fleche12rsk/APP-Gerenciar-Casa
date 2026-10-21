@@ -1,6 +1,10 @@
 package dev.micio.casa.ui.components
 
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.util.LruCache
+import android.view.LayoutInflater
+import android.view.TextureView
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -49,20 +53,45 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.rtsp.RtspMediaSource
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import dev.micio.casa.R
 import dev.micio.casa.integrations.ha.HomeAssistantClient
 import dev.micio.casa.ui.theme.Palette
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
-/** Vídeo ao vivo RTSP com buffer curto, para a imagem ficar o mais próxima do tempo real. */
+/** Último quadro visto de cada câmera, para mostrar algo enquanto ela dorme. */
+object FrameCache {
+    data class Frame(val image: ImageBitmap, val capturedAt: Long)
+
+    private val frames = LruCache<String, Frame>(12)
+
+    fun get(key: String): Frame? = frames.get(key)
+
+    fun put(key: String, bitmap: Bitmap) {
+        frames.put(key, Frame(bitmap.asImageBitmap(), System.currentTimeMillis()))
+    }
+}
+
+/**
+ * Vídeo ao vivo RTSP com buffer curto, para a imagem ficar o mais próxima do tempo real.
+ * Com [frameKey], guarda periodicamente um quadro reduzido no [FrameCache].
+ */
 @OptIn(UnstableApi::class)
 @Composable
-fun RtspPlayer(url: String, muted: Boolean, modifier: Modifier = Modifier, fit: Boolean = false) {
+fun RtspPlayer(
+    url: String,
+    muted: Boolean,
+    modifier: Modifier = Modifier,
+    fit: Boolean = false,
+    frameKey: String? = null,
+    noSignalAction: (@Composable () -> Unit)? = null,
+) {
     val context = LocalContext.current
     var attempt by remember(url) { mutableIntStateOf(0) }
     var error by remember(url) { mutableStateOf<String?>(null) }
     var buffering by remember(url) { mutableStateOf(true) }
+    var view by remember { mutableStateOf<PlayerView?>(null) }
 
     val player = remember(url, attempt) {
         val loadControl = DefaultLoadControl.Builder()
@@ -92,11 +121,21 @@ fun RtspPlayer(url: String, muted: Boolean, modifier: Modifier = Modifier, fit: 
         }
         player.addListener(listener)
         onDispose {
+            if (frameKey != null) view?.let { captureFrame(it, frameKey) }
             player.removeListener(listener)
             player.release()
         }
     }
     LaunchedEffect(player, muted) { player.volume = if (muted) 0f else 1f }
+
+    if (frameKey != null) {
+        LaunchedEffect(player) {
+            while (true) {
+                delay(10_000)
+                if (!buffering && error == null) view?.let { captureFrame(it, frameKey) }
+            }
+        }
+    }
 
     // Para o vídeo quando o app vai para segundo plano, poupando rede e bateria.
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -114,15 +153,10 @@ fun RtspPlayer(url: String, muted: Boolean, modifier: Modifier = Modifier, fit: 
 
     Box(modifier.background(Color.Black), contentAlignment = Alignment.Center) {
         AndroidView(
-            factory = { ctx ->
-                PlayerView(ctx).apply {
-                    useController = false
-                    setShutterBackgroundColor(android.graphics.Color.BLACK)
-                }
-            },
-            update = { view ->
-                view.player = player
-                view.resizeMode = if (fit) AspectRatioFrameLayout.RESIZE_MODE_FIT else AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+            factory = { ctx -> (LayoutInflater.from(ctx).inflate(R.layout.rtsp_player, null) as PlayerView).also { view = it } },
+            update = { v ->
+                v.player = player
+                v.resizeMode = if (fit) AspectRatioFrameLayout.RESIZE_MODE_FIT else AspectRatioFrameLayout.RESIZE_MODE_ZOOM
             },
             modifier = Modifier.fillMaxSize(),
         )
@@ -130,12 +164,18 @@ fun RtspPlayer(url: String, muted: Boolean, modifier: Modifier = Modifier, fit: 
             CircularProgressIndicator(color = Palette.Ivory.copy(alpha = 0.7f), strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
         }
         error?.let { message ->
-            NoSignal(message) {
-                error = null
-                attempt++
-            }
+            NoSignal(message, onRetry = { error = null; attempt++ }, extra = noSignalAction)
         }
     }
+}
+
+@OptIn(UnstableApi::class)
+private fun captureFrame(view: PlayerView, key: String) {
+    val texture = view.videoSurfaceView as? TextureView ?: return
+    if (!texture.isAvailable || texture.width == 0) return
+    val width = 640
+    val height = (width * texture.height / texture.width).coerceAtLeast(1)
+    texture.getBitmap(width, height)?.let { FrameCache.put(key, it) }
 }
 
 /** Câmeras vindas do Home Assistant: atualiza um retrato a cada dois segundos. */
@@ -159,20 +199,21 @@ fun HaSnapshot(client: HomeAssistantClient, entityId: String, modifier: Modifier
             Image(it, contentDescription = null, contentScale = if (fit) ContentScale.Fit else ContentScale.Crop, modifier = Modifier.fillMaxSize())
         }
         if (image == null && !failed) CircularProgressIndicator(color = Palette.Ivory.copy(alpha = 0.7f), strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
-        if (failed) NoSignal("Sem imagem do Home Assistant", null)
+        if (failed) NoSignal("Sem imagem do Home Assistant", onRetry = null, extra = null)
     }
 }
 
 @Composable
-private fun NoSignal(message: String, onRetry: (() -> Unit)?) {
+private fun NoSignal(message: String, onRetry: (() -> Unit)?, extra: (@Composable () -> Unit)?) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Icon(Icons.Rounded.VideocamOff, contentDescription = null, tint = Palette.Mist)
         Text(message, color = Palette.Mist, style = MaterialTheme.typography.bodySmall)
         onRetry?.let {
             TextButton(onClick = it) {
                 Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(16.dp), tint = Palette.Ivory)
-                Text("Tentar de novo", color = Palette.Ivory, modifier = Modifier.background(Color.Transparent))
+                Text("Tentar de novo", color = Palette.Ivory)
             }
         }
+        extra?.invoke()
     }
 }

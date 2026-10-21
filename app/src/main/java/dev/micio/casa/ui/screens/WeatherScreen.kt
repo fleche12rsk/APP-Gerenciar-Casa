@@ -109,6 +109,7 @@ fun WeatherScreen(vm: MainViewModel, wide: Boolean) {
     val hPad = if (wide) 32.dp else 16.dp
     val pick: (WeatherPlace) -> Unit = { place ->
         vm.updateConfig { it.copy(weather = place) }
+        vm.river.suggestFor(place)
         changing = false
     }
 

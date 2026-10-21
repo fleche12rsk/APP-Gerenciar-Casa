@@ -2,7 +2,10 @@
 
 App Android para **tablet** (funciona também no celular) que junta todas as marcas da casa
 num painel só, no estilo do Apple Home: luzes, interruptores, tomadas, TV, câmeras,
-aspirador robô, controle infravermelho, Alexa e previsão do tempo.
+aspirador robô, controle infravermelho, Alexa, previsão do tempo e nível dos rios.
+
+Funciona para qualquer casa: nenhum aparelho, senha ou endereço fica fixo no código —
+cada pessoa conecta o que tem em **Ajustes**.
 
 | Tablet | Celular |
 | --- | --- |
@@ -19,6 +22,7 @@ aspirador robô, controle infravermelho, Alexa e previsão do tempo.
 | Aspirador **Eufy** | Home Assistant (integração Eufy RoboVac) | Home Assistant na rede |
 | **Alexa** / Echo Spot | Home Assistant (integração Alexa Media Player) | Home Assistant na rede |
 | Previsão do tempo | [Open-Meteo](https://open-meteo.com) (dados de serviços meteorológicos oficiais) | Só escolher a cidade |
+| Nível dos rios | Painel público das Defesas Civis municipais (ex.: Rio do Sul - SC) | Cidade atendida pelo painel |
 
 Eufy e Amazon não oferecem acesso aberto aos aparelhos para outros apps. O
 [Home Assistant](https://www.home-assistant.io/) — gratuito, roda num Raspberry Pi,
@@ -35,7 +39,12 @@ Ele é opcional: sem ele, tudo o mais continua funcionando.
 - **Clima**: temperatura, sensação térmica, condição do céu, umidade, vento com direção, rajadas,
   chance e volume de chuva, índice UV, pressão, nebulosidade, nascer e pôr do sol, as próximas
   24 horas e os próximos 7 dias. Aparece resumido na tela inicial e responde a “vai chover hoje?”.
-- **Câmeras**: grade ao vivo (stream reduzido) e tela cheia com som (stream principal).
+- **Nível do rio**: leitura atual, faixa (Normal, Atenção, Alerta, Emergência), tendência em cm/h,
+  gráfico das últimas 24 h e as demais estações da cidade, direto do painel da Defesa Civil.
+  Aparece sozinho ao escolher no clima uma cidade atendida; também em Ajustes › Nível do rio.
+- **Câmeras**: grade ao vivo (stream reduzido) e tela cheia com som (stream principal). Câmeras
+  solares ou a bateria podem ficar **só de dia** ou **só quando tocar**, com desligamento
+  automático (30 s a 5 min) e a última imagem vista enquanto descansam.
 - **TV**: liga/desliga, direcional, voltar/início/menu, volume, canais, entradas HDMI e os apps
   instalados na TV com os ícones de verdade.
 - **Controles**: botões dos controles infravermelho cadastrados no Smart Life e painel de
@@ -107,6 +116,9 @@ fixo para ela no roteador.
 - **EZVIZ**: usuário `admin`, senha = código de verificação de 6 letras da etiqueta. Se não abrir,
   desative a “criptografia de imagem” no app EZVIZ.
 - **ICSee/XMEye**: usuário `admin` e a senha do app ICSee (vazia se nunca definida).
+- **Solares / a bateria**: em Ajustes › Câmeras, toque na câmera e escolha “Ao vivo só de dia”
+  ou “Só quando tocar”. Muitos modelos a bateria dormem fora da transmissão e não aceitam RTSP;
+  nesses casos o app oferece “Abrir no app iCSee”.
 - **Outras**: qualquer endereço RTSP/ONVIF.
 
 ### Home Assistant (Eufy e Alexa)

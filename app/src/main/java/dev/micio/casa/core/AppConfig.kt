@@ -9,6 +9,8 @@ data class AppConfig(
     val homeAssistant: HaConfig? = null,
     val cameras: List<CameraConfig> = emptyList(),
     val weather: WeatherPlace? = null,
+    /** Cidade monitorada pela Defesa Civil (nível dos rios na tela inicial); null = desligado. */
+    val river: RiverCity? = null,
     val overrides: Map<String, DeviceOverride> = emptyMap(),
     val rooms: List<String> = listOf("Sala", "Cozinha", "Quarto", "Escritório", "Área externa"),
     val keepScreenOn: Boolean = true,
@@ -56,7 +58,18 @@ data class CameraConfig(
     val url: String,
     val subUrl: String? = null,
     val room: String? = null,
+    val power: CameraPower = CameraPower.ALWAYS,
+    /** Tempo que o vídeo fica aberto quando ligado com um toque (câmeras a bateria). */
+    val autoStopSeconds: Int = 60,
 )
+
+/** Quando o app mantém o vídeo ao vivo. Câmeras solares/bateria gastam energia enquanto transmitem. */
+@Serializable
+enum class CameraPower(val label: String, val description: String) {
+    ALWAYS("Sempre ao vivo", "Para câmeras ligadas na tomada."),
+    DAYTIME("Ao vivo só de dia", "Do nascer ao pôr do sol. À noite, só quando você tocar."),
+    ON_DEMAND("Só quando tocar", "Economiza ao máximo a bateria de câmeras solares."),
+}
 
 @Serializable
 enum class CameraBrand(val label: String) {
@@ -71,6 +84,15 @@ data class DeviceOverride(
     val room: String? = null,
     val hidden: Boolean = false,
     val favorite: Boolean = false,
+)
+
+@Serializable
+data class RiverCity(
+    val id: Int,
+    val name: String,
+    val state: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
 )
 
 @Serializable
