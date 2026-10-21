@@ -78,8 +78,23 @@ Sem conta de desenvolvedor paga, a instalação é feita pelo computador:
 4. Na primeira abertura, permita o acesso à **rede local** — é por ela que o app fala com a TV,
    as câmeras e o Home Assistant.
 
-Com Apple ID gratuito a instalação vale **7 dias** (o Sideloadly e o AltStore renovam). Com a conta
-de desenvolvedor da Apple (US$ 99/ano) vale 1 ano e permite publicar na App Store.
+Com Apple ID gratuito a instalação vale **7 dias**. Com a conta de desenvolvedor da Apple
+(US$ 99/ano) vale 1 ano e dá para instalar pelo TestFlight, sem computador.
+
+### iPhone de uso diário, sem pagar: SideStore
+
+O limite de 7 dias é da Apple e não tem como evitar sem a conta paga. O [SideStore](https://sidestore.io)
+renova o app **pelo próprio iPhone**, sem depender do computador ligado:
+
+1. Siga o guia oficial do SideStore uma única vez (usa o computador para instalar o SideStore e
+   gerar o arquivo de pareamento, e um app de VPN local da App Store indicado no guia).
+2. Envie o `Casa.ipa` para o iPhone (AirDrop, iCloud Drive ou Arquivos) e, no SideStore, toque em
+   **+** e escolha o arquivo.
+3. Para nunca vencer: no app **Atalhos › Automação**, crie uma automação diária que execute
+   **Atualizar todos os apps** do SideStore.
+
+Limites do Apple ID gratuito: no máximo 3 apps instalados assim ao mesmo tempo (o SideStore conta
+como um). Atualizações do iOS às vezes exigem refazer o pareamento.
 
 Diferenças no iOS:
 
