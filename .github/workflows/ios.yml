@@ -24,8 +24,9 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      # O Gradle configura também o módulo Android, que precisa do SDK.
-      - uses: android-actions/setup-android@v3
+      # O Gradle configura também o módulo Android; o Mac do GitHub já traz o SDK.
+      - name: Apontar o SDK do Android
+        run: echo "sdk.dir=${ANDROID_HOME:-$HOME/Library/Android/sdk}" > local.properties
 
       - uses: gradle/actions/setup-gradle@v4
 
