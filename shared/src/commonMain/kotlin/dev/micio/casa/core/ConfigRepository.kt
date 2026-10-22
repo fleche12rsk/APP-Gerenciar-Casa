@@ -22,6 +22,18 @@ class ConfigRepository(private val storage: ConfigStorage) {
         runCatching { storage.write(Http.json.encodeToString(after)) }
     }
 
-    private fun load(): AppConfig =
-        storage.read()?.let { runCatching { Http.json.decodeFromString<AppConfig>(it) }.getOrNull() } ?: AppConfig()
+    private fun load(): AppConfig {
+        val stored = storage.read()?.let { runCatching { Http.json.decodeFromString<AppConfig>(it) }.getOrNull() }
+        return stored?.migrated() ?: AppConfig()
+    }
+}
+
+/** Atualiza configurações salvas por versões anteriores do app. */
+fun AppConfig.migrated(): AppConfig {
+    val legacy = tv ?: return this
+    if (tvs.isNotEmpty()) return copy(tv = null)
+    return copy(
+        tvs = listOf(TvConfig("tv1", TvBrand.LG, legacy.host, legacy.mac, legacy.clientKey, legacy.name)),
+        tv = null,
+    )
 }

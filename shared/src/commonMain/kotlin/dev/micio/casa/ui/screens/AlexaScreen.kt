@@ -100,7 +100,7 @@ fun AlexaScreen(vm: MainViewModel, wide: Boolean, onOpenSettings: () -> Unit) {
                 title = "Alexa no seu tablet",
                 message = if (ha == null) {
                     "A Amazon não libera o Echo para outros apps. A ponte é o Home Assistant com a integração " +
-                        "Alexa Media Player: com ela você manda comandos, anúncios e controla o volume do Echo Spot daqui."
+                        "Alexa Media Player: com ela você manda comandos, anúncios e controla o volume dos seus Echos daqui."
                 } else {
                     "O Home Assistant está conectado, mas nenhum Echo foi encontrado. Instale a integração Alexa Media Player (HACS)."
                 },

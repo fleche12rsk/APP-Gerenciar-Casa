@@ -28,8 +28,8 @@ import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.addJsonObject
 
 /**
- * Interruptores, tomadas, lâmpadas e controles IR que usam a nuvem Tuya. NovaDigital,
- * Intelbras Izy, WAG e boa parte das marcas "smart" vendidas no Brasil são Tuya por dentro.
+ * Interruptores, tomadas, lâmpadas e controles IR que usam a nuvem Tuya — boa parte
+ * das marcas "smart" vendidas no Brasil é Tuya por dentro.
  */
 class TuyaProvider(config: TuyaConfig) : DeviceProvider {
 

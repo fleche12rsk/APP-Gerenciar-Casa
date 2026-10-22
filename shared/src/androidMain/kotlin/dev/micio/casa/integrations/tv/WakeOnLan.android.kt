@@ -1,4 +1,4 @@
-package dev.micio.casa.integrations.lg
+package dev.micio.casa.integrations.tv
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

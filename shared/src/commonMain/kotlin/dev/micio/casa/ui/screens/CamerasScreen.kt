@@ -118,7 +118,7 @@ fun CamerasScreen(vm: MainViewModel, wide: Boolean, onOpenSettings: () -> Unit) 
             EmptyState(
                 icon = Icons.Rounded.VideocamOff,
                 title = "Nenhuma câmera ainda",
-                message = "Adicione as câmeras EZVIZ e ICSee pelo IP da rede local. A imagem vem direto da câmera, sem passar pela nuvem.",
+                message = "Adicione câmeras de rede (EZVIZ, iCSee e outras com RTSP) pelo IP. A imagem vem direto da câmera, sem passar pela nuvem.",
             ) {
                 Button(onClick = onOpenSettings, colors = ButtonDefaults.buttonColors(containerColor = Palette.Ivory, contentColor = Palette.Ink)) {
                     Text("Adicionar câmera")

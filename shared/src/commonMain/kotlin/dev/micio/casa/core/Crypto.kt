@@ -71,3 +71,30 @@ fun hmacSha256(key: ByteArray, message: ByteArray): ByteArray {
 }
 
 fun ByteArray.toHex(): String = joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }
+
+/** PBKDF2-HMAC-SHA256 (RFC 8018): transforma a senha digitada numa chave. */
+fun pbkdf2Sha256(password: ByteArray, salt: ByteArray, iterations: Int, length: Int): ByteArray {
+    val out = ByteArray(length)
+    var block = 1
+    var offset = 0
+    while (offset < length) {
+        var u = hmacSha256(password, salt + byteArrayOf((block ushr 24).toByte(), (block ushr 16).toByte(), (block ushr 8).toByte(), block.toByte()))
+        val t = u.copyOf()
+        repeat(iterations - 1) {
+            u = hmacSha256(password, u)
+            for (i in t.indices) t[i] = (t[i].toInt() xor u[i].toInt()).toByte()
+        }
+        t.copyInto(out, offset, 0, minOf(t.size, length - offset))
+        offset += t.size
+        block++
+    }
+    return out
+}
+
+/** Comparação em tempo constante, para não vazar quantos bytes da etiqueta acertaram. */
+fun constantTimeEquals(a: ByteArray, b: ByteArray): Boolean {
+    if (a.size != b.size) return false
+    var diff = 0
+    for (i in a.indices) diff = diff or (a[i].toInt() xor b[i].toInt())
+    return diff == 0
+}

@@ -19,7 +19,7 @@ internal actual fun createHttpClient(): HttpClient = HttpClient(OkHttp) {
 }
 
 internal actual fun createLanHttpClient(): HttpClient {
-    // Aceita o certificado autoassinado da TV LG (wss://IP:3001). Só usado na rede local.
+    // Aceita o certificado autoassinado das TVs (LG, Samsung). Só usado na rede local.
     val trustAll = object : X509TrustManager {
         override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) = Unit
         override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) = Unit

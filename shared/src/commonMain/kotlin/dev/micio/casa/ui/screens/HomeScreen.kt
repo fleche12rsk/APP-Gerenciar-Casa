@@ -135,13 +135,20 @@ fun HomeScreen(
                 EmptyState(
                     icon = Icons.Rounded.Roofing,
                     title = "Vamos montar a sua casa",
-                    message = "Conecte o Smart Life (interruptores NovaDigital, Intelbras e WAG), a TV LG, " +
-                        "as câmeras e o Home Assistant (aspirador Eufy e Alexa) em Ajustes.",
+                    message = "Conecte os seus aparelhos em Ajustes: Smart Life/Tuya, TVs, câmeras e Home Assistant. " +
+                        "Se já usa o Casa em outro aparelho, é só receber a configuração de lá.",
                 ) {
-                    Button(
-                        onClick = onOpenSettings,
-                        colors = ButtonDefaults.buttonColors(containerColor = Palette.Ivory, contentColor = Palette.Ink),
-                    ) { Text("Abrir Ajustes") }
+                    var importing by rememberSaveable { mutableStateOf(false) }
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Button(
+                            onClick = onOpenSettings,
+                            colors = ButtonDefaults.buttonColors(containerColor = Palette.Ivory, contentColor = Palette.Ink),
+                        ) { Text("Abrir Ajustes") }
+                        androidx.compose.material3.OutlinedButton(onClick = { importing = true }) {
+                            Text("Já uso em outro aparelho", color = Palette.Ivory)
+                        }
+                    }
+                    if (importing) ImportConfigDialog(vm) { importing = false }
                 }
             }
             return@LazyVerticalGrid

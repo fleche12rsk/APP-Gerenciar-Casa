@@ -16,7 +16,7 @@ object Http {
     val client: HttpClient by lazy { createHttpClient() }
 
     /**
-     * Cliente só para a TV LG: o webOS expõe wss://IP:3001 com certificado
+     * Cliente para as TVs da rede local: LG e Samsung expõem wss:// com certificado
      * autoassinado, que nenhuma autoridade pública consegue validar. Fica restrito
      * a endereços da rede local digitados pelo usuário. Já vem com WebSockets.
      */

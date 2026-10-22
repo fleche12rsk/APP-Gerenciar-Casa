@@ -21,8 +21,8 @@ import kotlinx.serialization.json.putJsonObject
 import kotlin.math.roundToInt
 
 /**
- * Tudo que já está no Home Assistant entra no app: aspirador Eufy (integração
- * eufy/robovac), Echo Spot (Alexa Media Player), câmeras, sensores, cenas e scripts.
+ * Tudo que já está no Home Assistant entra no app: aspiradores, Echos (Alexa Media
+ * Player), câmeras, sensores, cenas e scripts.
  */
 class HomeAssistantProvider(config: HaConfig) : DeviceProvider {
 

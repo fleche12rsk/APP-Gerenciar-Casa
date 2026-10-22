@@ -19,7 +19,7 @@ internal actual fun createHttpClient(): HttpClient = HttpClient(Darwin) {
     }
 }
 
-/** Aceita o certificado autoassinado da TV LG (wss://IP:3001). Só usado na rede local. */
+/** Aceita o certificado autoassinado das TVs (LG, Samsung). Só usado na rede local. */
 @OptIn(ExperimentalForeignApi::class)
 internal actual fun createLanHttpClient(): HttpClient = HttpClient(Darwin) {
     engine {

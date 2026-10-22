@@ -29,6 +29,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Devices
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Hub
@@ -80,13 +81,15 @@ import dev.micio.casa.core.CameraConfig
 import dev.micio.casa.core.CameraPower
 import dev.micio.casa.core.RiverCity
 import dev.micio.casa.core.HaConfig
-import dev.micio.casa.core.LgTvConfig
+import dev.micio.casa.core.TvBrand
+import dev.micio.casa.core.TvConfig
 import dev.micio.casa.core.TuyaConfig
 import dev.micio.casa.core.TuyaRegion
 import dev.micio.casa.core.WeatherPlace
 import dev.micio.casa.integrations.camera.CameraTemplates
-import dev.micio.casa.integrations.lg.LgTvProvider
-import dev.micio.casa.integrations.lg.WebOsClient
+import dev.micio.casa.integrations.tv.TvConnection
+import dev.micio.casa.integrations.tv.TvController
+import dev.micio.casa.integrations.tv.TvProvider
 import dev.micio.casa.model.Device
 import dev.micio.casa.model.Source
 import dev.micio.casa.ui.MainViewModel
@@ -121,7 +124,7 @@ fun SettingsScreen(vm: MainViewModel, wide: Boolean, onOpenDevice: (Device) -> U
         item {
             TuyaCard(vm, config.tuya, errors[Source.TUYA], allDevices.count { it.source == Source.TUYA }, column)
         }
-        item { TvCard(vm, config.tv, column) }
+        item { TvsCard(vm, config.tvs, column) }
         item {
             HomeAssistantCard(vm, config.homeAssistant, errors[Source.HOME_ASSISTANT], allDevices.count { it.source == Source.HOME_ASSISTANT }, column)
         }
@@ -140,6 +143,9 @@ fun SettingsScreen(vm: MainViewModel, wide: Boolean, onOpenDevice: (Device) -> U
             item { SectionTitle("Aparelhos (${allDevices.size})", column) }
             item { DevicesCard(allDevices, onOpenDevice, column) }
         }
+
+        item { SectionTitle("Outros aparelhos", column) }
+        item { TransferCard(vm, column) }
 
         item { SectionTitle("Tela", column) }
         item {
@@ -169,7 +175,7 @@ private fun TuyaCard(vm: MainViewModel, current: TuyaConfig?, error: String?, co
         icon = Icons.Rounded.WbIncandescent,
         accent = Palette.Ember,
         title = "Smart Life / Tuya",
-        brands = "Interruptores NovaDigital, Intelbras Izy e WAG · controle IR Intelbras",
+        brands = "Interruptores, tomadas, lâmpadas, sensores e controles IR de centenas de marcas",
         status = statusText(current != null, error, "$count aparelhos"),
         healthy = current != null && error == null,
         modifier = modifier,
@@ -189,7 +195,7 @@ private fun TuyaCard(vm: MainViewModel, current: TuyaConfig?, error: String?, co
         Help(
             "Crie uma conta em iot.tuya.com › Cloud › Create Cloud Project (tipo Smart Home, data center “Western America” para contas do Brasil).",
             "Em Devices › Link Tuya App Account, leia o QR code com o app Smart Life (aba Eu › ícone de leitura no topo).",
-            "Os apps de marca (Izy Smart, NovaDigital) costumam não aparecer para vínculo: nesse caso, adicione os mesmos aparelhos ao Smart Life — eles continuam funcionando com a Alexa.",
+            "Aparelhos cadastrados em apps de marca própria (que usam Tuya por dentro) costumam não aparecer para vínculo: adicione-os também ao Smart Life — eles continuam funcionando com a Alexa e o Google.",
             "Em Service API, confira se estão ativas: IoT Core, Authorization Token Management, Smart Home Scene Linkage e IR Control Hub Open Service.",
             "Copie o Access ID e o Access Secret da aba Overview do projeto e cole aqui.",
             "O plano gratuito de testes da Tuya precisa ser renovado de tempos em tempos (é grátis, pelo mesmo site).",
@@ -198,59 +204,119 @@ private fun TuyaCard(vm: MainViewModel, current: TuyaConfig?, error: String?, co
 }
 
 @Composable
-private fun TvCard(vm: MainViewModel, current: LgTvConfig?, modifier: Modifier) {
+private fun TvsCard(vm: MainViewModel, tvs: List<TvConfig>, modifier: Modifier) {
     val providers by vm.home.providers.collectAsState()
-    val tv = (providers[Source.LG] as? LgTvProvider)?.tv
-    val state = tv?.state?.collectAsState()?.value
-    var host by rememberSaveable(current?.host) { mutableStateOf(current?.host.orEmpty()) }
-    var mac by rememberSaveable(current?.mac) { mutableStateOf(current?.mac.orEmpty()) }
-    var name by rememberSaveable(current?.name) { mutableStateOf(current?.name ?: "TV da sala") }
+    val controllers = (providers[Source.TV] as? TvProvider)?.controllers.orEmpty()
+    var adding by rememberSaveable { mutableStateOf(false) }
 
     IntegrationCard(
         icon = Icons.Rounded.Tv,
         accent = Palette.Sky,
-        title = "TV LG (webOS)",
-        brands = "Smart TV Mini LED QNED 4K · controle pela rede local",
-        status = when {
-            current == null -> "Não configurada"
-            state == WebOsClient.State.CONNECTED -> "Conectada"
-            state == WebOsClient.State.WAITING_APPROVAL -> "Aceite o pedido na tela da TV"
-            tv?.clientKey == null -> "Falta parear"
-            else -> "Pareada · desligada ou fora da rede"
+        title = "TVs",
+        brands = "LG, Samsung e Roku pela rede de casa · outras marcas pelo Home Assistant ou infravermelho",
+        status = when (tvs.size) {
+            0 -> "Nenhuma TV"
+            1 -> "1 TV"
+            else -> "${tvs.size} TVs"
         },
-        healthy = state == WebOsClient.State.CONNECTED,
+        healthy = tvs.isNotEmpty(),
         modifier = modifier,
     ) {
-        Field("Nome", name) { name = it }
-        Field("IP da TV (ex.: 192.168.0.50)", host, keyboard = KeyboardType.Uri) { host = it }
-        Field("MAC (para ligar a TV pelo app)", mac) { mac = it.uppercase() }
-        Actions(
-            saveEnabled = host.isNotBlank(),
-            saveLabel = "Salvar",
-            onSave = {
-                vm.updateConfig { c ->
-                    val keepKey = c.tv?.takeIf { it.host == host.trim() }?.clientKey
-                    c.copy(tv = LgTvConfig(host.trim(), mac.trim(), keepKey, name.trim().ifEmpty { "TV LG" }))
-                }
-            },
-            onRemove = current?.let { { vm.updateConfig { c -> c.copy(tv = null) } } },
-            extra = if (tv != null && state != WebOsClient.State.CONNECTED) {
-                {
-                    TextButton(onClick = { vm.home.launchAction("A TV não respondeu.") { tv.connect() } }) {
-                        Text(if (tv.clientKey == null) "Parear agora" else "Conectar", color = Palette.Ember)
-                    }
-                }
-            } else null,
-        )
-        Help(
-            "Ligue a TV e deixe o tablet na mesma rede Wi-Fi.",
-            "IP e MAC ficam em Configurações › Geral › Rede › Wi-Fi › Configurações avançadas (ou em Sobre esta TV).",
-            "Toque em Parear agora: a TV mostra um pedido de permissão — aceite com o controle remoto. Isso só é feito uma vez.",
-            "Para ligar a TV pelo app, ative em Configurações › Geral › Dispositivos › “Ligar via Wi-Fi” (nome varia por modelo).",
-            "Dica: reserve um IP fixo para a TV no roteador para o app sempre encontrá-la.",
-        )
+        tvs.forEach { tv -> TvRow(vm, tv, controllers[tv.id]) }
+        AnimatedVisibility(adding, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+            AddTvForm(onCancel = { adding = false }) { tv ->
+                vm.updateConfig { c -> c.copy(tvs = c.tvs + tv) }
+                adding = false
+            }
+        }
+        if (!adding) {
+            TextButton(onClick = { adding = true }) { Text("+ Adicionar TV", color = Palette.Ember) }
+        }
     }
 }
+
+@Composable
+private fun TvRow(vm: MainViewModel, tv: TvConfig, controller: TvController?) {
+    val state = controller?.connection?.collectAsState()?.value
+    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(tv.name, color = Palette.Ivory, style = MaterialTheme.typography.titleSmall)
+            Text(
+                listOf(
+                    tv.brand.label,
+                    tv.host,
+                    when {
+                        state == TvConnection.CONNECTED -> "conectada"
+                        state == TvConnection.WAITING_APPROVAL -> "aceite o pedido na TV"
+                        controller?.paired == false -> "falta autorizar"
+                        else -> "desligada ou fora da rede"
+                    },
+                ).joinToString(" · "),
+                color = if (state == TvConnection.WAITING_APPROVAL) Palette.Ember else Palette.Mist,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        if (controller != null && state != TvConnection.CONNECTED && state != TvConnection.WAITING_APPROVAL) {
+            TextButton(onClick = { vm.home.launchAction("A TV não respondeu.") { controller.connect() } }) {
+                Text(if (!controller.paired) "Autorizar" else "Conectar", color = Palette.Ember)
+            }
+        }
+        IconButton(onClick = { vm.updateConfig { c -> c.copy(tvs = c.tvs.filterNot { it.id == tv.id }) } }) {
+            Icon(Icons.Rounded.Delete, contentDescription = "Remover ${tv.name}", tint = Palette.Mist)
+        }
+    }
+}
+
+@Composable
+private fun AddTvForm(onCancel: () -> Unit, onSave: (TvConfig) -> Unit) {
+    var brand by rememberSaveable { mutableStateOf(TvBrand.LG) }
+    var name by rememberSaveable { mutableStateOf("") }
+    var host by rememberSaveable { mutableStateOf("") }
+    var mac by rememberSaveable { mutableStateOf("") }
+
+    Column(Modifier.padding(top = 8.dp)) {
+        Label("Marca")
+        ChoiceChips(TvBrand.entries, brand, { it.label }) { brand = it }
+        Field("Nome (ex.: TV da sala)", name) { name = it }
+        Field("IP da TV (ex.: 192.168.0.50)", host, keyboard = KeyboardType.Uri) { host = it }
+        Field("MAC, para ligar a TV pelo app (opcional)", mac) { mac = it.uppercase() }
+        Help(*tvHelp(brand))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                enabled = host.isNotBlank(),
+                onClick = {
+                    onSave(TvConfig(
+                        id = Random.nextBytes(4).toHex(),
+                        brand = brand,
+                        host = host.trim(),
+                        mac = mac.trim(),
+                        name = name.trim().ifEmpty { "TV" },
+                    ))
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Palette.Ivory, contentColor = Palette.Ink),
+            ) { Text("Salvar TV") }
+            TextButton(onClick = onCancel) { Text("Cancelar", color = Palette.Mist) }
+        }
+    }
+}
+
+private fun tvHelp(brand: TvBrand): Array<String> = when (brand) {
+    TvBrand.LG -> arrayOf(
+        "Com a TV ligada na mesma rede Wi-Fi, salve e toque em Autorizar: a TV mostra um pedido — aceite com o controle remoto. Só na primeira vez.",
+        "IP e MAC ficam em Configurações › Geral › Rede (ou em Sobre esta TV).",
+        "Para ligar pelo app, ative “Ligar via Wi-Fi” (o nome varia por modelo).",
+    )
+    TvBrand.SAMSUNG -> arrayOf(
+        "Com a TV ligada na mesma rede Wi-Fi, salve e toque em Autorizar: a TV pergunta se permite o acesso de “Casa” — escolha Permitir.",
+        "IP e MAC ficam em Configurações › Geral › Rede › Status da rede.",
+        "Para ligar pelo app, ative Configurações › Geral › Gerenciador de dispositivos externos › “Ligar com celular” (o nome varia por ano).",
+    )
+    TvBrand.ROKU -> arrayOf(
+        "O IP fica em Configurações › Rede › Sobre.",
+        "Em Configurações › Sistema › Configurações avançadas do sistema › Controle por apps móveis, deixe o acesso de rede como Ativado.",
+        "TVs com Roku (TCL, Semp, AOC…) ligam pelo app com o “Início rápido da TV” ativado.",
+    )
+}.plus("Dica: reserve um IP fixo para a TV no roteador para o app sempre encontrá-la.")
 
 @Composable
 private fun HomeAssistantCard(vm: MainViewModel, current: HaConfig?, error: String?, count: Int, modifier: Modifier) {
@@ -261,7 +327,7 @@ private fun HomeAssistantCard(vm: MainViewModel, current: HaConfig?, error: Stri
         icon = Icons.Rounded.Hub,
         accent = Palette.Lagoon,
         title = "Home Assistant",
-        brands = "Aspirador Eufy · Alexa / Echo Spot · e qualquer outra marca",
+        brands = "Aspiradores robô, Alexa, Google, Philips Hue e milhares de outras integrações",
         status = statusText(current != null, error, "$count entidades"),
         healthy = current != null && error == null,
         modifier = modifier,
@@ -277,9 +343,9 @@ private fun HomeAssistantCard(vm: MainViewModel, current: HaConfig?, error: Stri
             onRemove = current?.let { { vm.updateConfig { c -> c.copy(homeAssistant = null) } } },
         )
         Help(
-            "Eufy e Amazon não oferecem acesso aberto aos aparelhos. O Home Assistant (gratuito, roda num Raspberry Pi ou mini PC) faz essa ponte com segurança, dentro de casa.",
-            "Aspirador Eufy: instale pelo HACS a integração “Eufy RoboVac” (ou eufy-clean, conforme o modelo).",
-            "Alexa: instale pelo HACS a integração “Alexa Media Player” e entre com a sua conta Amazon. O Echo Spot aparece na aba Alexa.",
+            "Muitas marcas não oferecem acesso aberto aos aparelhos. O Home Assistant (gratuito, roda num Raspberry Pi, mini PC ou no Windows) faz essa ponte com segurança, dentro de casa.",
+            "Aspirador robô (Eufy, Roborock, Xiaomi, iRobot...): adicione a integração da marca no Home Assistant — algumas vêm pelo HACS.",
+            "Alexa: instale pelo HACS a integração “Alexa Media Player” e entre com a sua conta Amazon. Os seus Echos aparecem na aba Alexa.",
             "Crie o token em Perfil › Segurança › Tokens de acesso de longa duração › Criar token.",
         )
     }
@@ -365,6 +431,35 @@ private fun RiverSettingsCard(vm: MainViewModel, current: RiverCity?, modifier: 
             TextButton(onClick = { vm.updateConfig { it.copy(river = null) } }) { Text("Desligar", color = Palette.Coral) }
         }
     }
+}
+
+/** Leva a configuração para outro celular ou tablet com um código cifrado. */
+@Composable
+private fun TransferCard(vm: MainViewModel, modifier: Modifier) {
+    var exporting by rememberSaveable { mutableStateOf(false) }
+    var importing by rememberSaveable { mutableStateOf(false) }
+    GlassCard(modifier) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconBadge(Icons.Rounded.Devices, Palette.Sage)
+            Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
+                Text("Usar em outro celular ou tablet", style = MaterialTheme.typography.titleMedium, color = Palette.Ivory)
+                Text(
+                    "Gere um código com senha aqui e cole no outro aparelho: tudo fica configurado, sem cadastrar de novo.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Palette.Mist,
+                )
+            }
+        }
+        Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = { exporting = true },
+                colors = ButtonDefaults.buttonColors(containerColor = Palette.Ivory, contentColor = Palette.Ink),
+            ) { Text("Enviar configuração") }
+            TextButton(onClick = { importing = true }) { Text("Receber", color = Palette.Ember) }
+        }
+    }
+    if (exporting) ExportConfigDialog(vm) { exporting = false }
+    if (importing) ImportConfigDialog(vm) { importing = false }
 }
 
 // ---------- Câmeras ----------

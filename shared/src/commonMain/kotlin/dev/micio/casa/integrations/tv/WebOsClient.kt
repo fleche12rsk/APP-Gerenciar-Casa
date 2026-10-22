@@ -1,4 +1,4 @@
-package dev.micio.casa.integrations.lg
+package dev.micio.casa.integrations.tv
 
 import dev.micio.casa.core.Http
 import dev.micio.casa.integrations.IntegrationException
@@ -32,9 +32,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
-data class TvApp(val id: String, val title: String, val icon: String?)
-data class TvInput(val id: String, val label: String)
-
 /**
  * Protocolo SSAP das TVs LG webOS: WebSocket local em wss://IP:3001 (firmwares
  * recentes) ou ws://IP:3000. Na primeira conexão a TV pergunta se aceita o
@@ -45,19 +42,18 @@ class WebOsClient(
     clientKey: String?,
     private val onClientKey: (String) -> Unit,
     private val http: HttpClient = Http.lanClient,
-) {
-    enum class State { DISCONNECTED, CONNECTING, WAITING_APPROVAL, CONNECTED }
+) : TvController {
 
-    private val _state = MutableStateFlow(State.DISCONNECTED)
-    val state: StateFlow<State> = _state.asStateFlow()
+    private val _state = MutableStateFlow(TvConnection.DISCONNECTED)
+    override val connection: StateFlow<TvConnection> = _state.asStateFlow()
 
     private val _volume = MutableStateFlow<Int?>(null)
-    val volume: StateFlow<Int?> = _volume.asStateFlow()
+    override val volume: StateFlow<Int?> = _volume.asStateFlow()
 
     var clientKey: String? = clientKey
         private set
 
-    val isConnected get() = _state.value == State.CONNECTED
+    override val paired get() = clientKey != null
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val connectMutex = Mutex()
@@ -69,7 +65,7 @@ class WebOsClient(
     private var pointer: DefaultClientWebSocketSession? = null
 
     /** Conecta e registra. Sem chave salva, a TV mostra o pedido de autorização. */
-    suspend fun connect(timeoutMs: Long = 60_000) = connectMutex.withLock {
+    override suspend fun connect(timeoutMs: Long) = connectMutex.withLock {
         if (isConnected) return@withLock
         var lastError: Throwable? = null
         for (url in listOf("wss://$host:3001", "ws://$host:3000")) {
@@ -79,12 +75,12 @@ class WebOsClient(
             } catch (e: Throwable) {
                 if (e is CancellationException && e !is TimeoutCancellationException) throw e
                 lastError = e
-                val wasWaitingApproval = _state.value == State.WAITING_APPROVAL
+                val wasWaitingApproval = _state.value == TvConnection.WAITING_APPROVAL
                 close()
                 if (wasWaitingApproval) break
             }
         }
-        _state.value = State.DISCONNECTED
+        _state.value = TvConnection.DISCONNECTED
         throw IntegrationException(
             if (lastError is TimeoutCancellationException) "A TV não respondeu. Ela está ligada e na mesma rede?"
             else "Não foi possível conectar à TV: ${lastError?.message ?: "erro desconhecido"}"
@@ -92,7 +88,7 @@ class WebOsClient(
     }
 
     private suspend fun open(url: String, timeoutMs: Long) {
-        _state.value = State.CONNECTING
+        _state.value = TvConnection.CONNECTING
         withTimeout(timeoutMs) {
             val ws = http.webSocketSession(url)
             session = ws
@@ -119,7 +115,7 @@ class WebOsClient(
         }
     }
 
-    fun close() {
+    override fun close() {
         val ws = session
         val pointerSession = pointer
         session = null
@@ -135,7 +131,7 @@ class WebOsClient(
 
     private fun markClosed() {
         session = null
-        _state.value = State.DISCONNECTED
+        _state.value = TvConnection.DISCONNECTED
         scope.launch {
             pendingMutex.withLock {
                 pending.values.forEach { it.cancel() }
@@ -171,34 +167,44 @@ class WebOsClient(
 
     // ---- Comandos ----
 
-    suspend fun powerOff() {
+    override suspend fun powerOff() {
         request("ssap://system/turnOff")
         close()
     }
 
-    suspend fun volumeUp() = request("ssap://audio/volumeUp").also { refreshVolume() }
-    suspend fun volumeDown() = request("ssap://audio/volumeDown").also { refreshVolume() }
-    suspend fun setVolume(value: Int) {
-        request("ssap://audio/setVolume", buildJsonObject { put("volume", value.coerceIn(0, 100)) })
-        _volume.value = value
+    override suspend fun press(key: TvKey) {
+        when (key) {
+            TvKey.VOLUME_UP -> request("ssap://audio/volumeUp").also { refreshVolume() }
+            TvKey.VOLUME_DOWN -> request("ssap://audio/volumeDown").also { refreshVolume() }
+            TvKey.CHANNEL_UP -> request("ssap://tv/channelUp")
+            TvKey.CHANNEL_DOWN -> request("ssap://tv/channelDown")
+            TvKey.PLAY -> request("ssap://media.controls/play")
+            TvKey.PAUSE -> request("ssap://media.controls/pause")
+            else -> button(BUTTONS.getValue(key))
+        }
     }
-    suspend fun setMute(mute: Boolean) = request("ssap://audio/setMute", buildJsonObject { put("mute", mute) })
-    suspend fun channelUp() = request("ssap://tv/channelUp")
-    suspend fun channelDown() = request("ssap://tv/channelDown")
-    suspend fun play() = request("ssap://media.controls/play")
-    suspend fun pause() = request("ssap://media.controls/pause")
-    suspend fun toast(message: String) = request("ssap://system.notifications/createToast", buildJsonObject { put("message", message) })
-    suspend fun launch(appId: String) = request("ssap://system.launcher/launch", buildJsonObject { put("id", appId) })
-    suspend fun switchInput(inputId: String) = request("ssap://tv/switchInput", buildJsonObject { put("inputId", inputId) })
 
-    suspend fun refreshVolume() {
+    override suspend fun setVolume(level: Int) {
+        request("ssap://audio/setVolume", buildJsonObject { put("volume", level.coerceIn(0, 100)) })
+        _volume.value = level
+    }
+
+    override suspend fun launch(appId: String) {
+        request("ssap://system.launcher/launch", buildJsonObject { put("id", appId) })
+    }
+
+    override suspend fun switchInput(inputId: String) {
+        request("ssap://tv/switchInput", buildJsonObject { put("inputId", inputId) })
+    }
+
+    override suspend fun refreshVolume() {
         val payload = runCatching { request("ssap://audio/getVolume") }.getOrNull() ?: return
         // webOS 5+ devolve dentro de volumeStatus; versões antigas, direto no payload.
         val status = payload["volumeStatus"]?.jsonObject ?: payload
         _volume.value = status["volume"]?.jsonPrimitive?.intOrNull
     }
 
-    suspend fun apps(): List<TvApp> =
+    override suspend fun apps(): List<TvApp> =
         request("ssap://com.webos.applicationManager/listLaunchPoints")["launchPoints"]?.jsonArray.orEmpty().map {
             val obj = it.jsonObject
             TvApp(
@@ -208,14 +214,14 @@ class WebOsClient(
             )
         }.filter { it.id.isNotEmpty() }
 
-    suspend fun inputs(): List<TvInput> =
+    override suspend fun inputs(): List<TvInput> =
         request("ssap://tv/getExternalInputList")["devices"]?.jsonArray.orEmpty().map {
             val obj = it.jsonObject
             TvInput(obj["id"]?.jsonPrimitive?.contentOrNull.orEmpty(), obj["label"]?.jsonPrimitive?.contentOrNull.orEmpty())
         }
 
     /** Botões do controle (setas, OK, voltar, home...) passam por um socket separado. */
-    suspend fun button(name: String) {
+    private suspend fun button(name: String) {
         val text = "type:button\nname:$name\n\n"
         val current = pointer ?: openPointer()
         try {
@@ -248,11 +254,11 @@ class WebOsClient(
                         clientKey = key
                         onClientKey(key)
                     }
-                _state.value = State.CONNECTED
+                _state.value = TvConnection.CONNECTED
                 registered.complete(Unit)
             }
             id == "register_0" && payload["pairingType"]?.jsonPrimitive?.contentOrNull == "PROMPT" ->
-                _state.value = State.WAITING_APPROVAL
+                _state.value = TvConnection.WAITING_APPROVAL
             id == "register_0" && type == "error" ->
                 registered.completeExceptionally(IntegrationException("Pareamento recusado na TV."))
             id != null -> {
@@ -264,5 +270,13 @@ class WebOsClient(
                 ))
             }
         }
+    }
+
+    private companion object {
+        val BUTTONS = mapOf(
+            TvKey.UP to "UP", TvKey.DOWN to "DOWN", TvKey.LEFT to "LEFT", TvKey.RIGHT to "RIGHT",
+            TvKey.OK to "ENTER", TvKey.BACK to "BACK", TvKey.HOME to "HOME", TvKey.MENU to "QMENU",
+            TvKey.INPUT to "INPUT_HUB", TvKey.MUTE to "MUTE",
+        )
     }
 }

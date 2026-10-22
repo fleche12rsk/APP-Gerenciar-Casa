@@ -1,4 +1,4 @@
-package dev.micio.casa.integrations.lg
+package dev.micio.casa.integrations.tv
 
 /** Liga a TV pela rede ("Ligar via Wi-Fi" precisa estar ativado na TV). */
 object WakeOnLan {

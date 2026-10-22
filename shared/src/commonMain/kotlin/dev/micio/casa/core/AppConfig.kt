@@ -5,7 +5,9 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class AppConfig(
     val tuya: TuyaConfig? = null,
-    val tv: LgTvConfig? = null,
+    val tvs: List<TvConfig> = emptyList(),
+    /** Formato antigo (uma TV LG só, versão 1.0); migrado para [tvs] ao carregar. */
+    val tv: LegacyTvConfig? = null,
     val homeAssistant: HaConfig? = null,
     val cameras: List<CameraConfig> = emptyList(),
     val weather: WeatherPlace? = null,
@@ -35,11 +37,30 @@ enum class TuyaRegion(val label: String, val host: String) {
 }
 
 @Serializable
-data class LgTvConfig(
+data class TvConfig(
+    val id: String,
+    val brand: TvBrand,
+    val host: String,
+    /** MAC para ligar pela rede (Wake-on-LAN); opcional. */
+    val mac: String = "",
+    /** Chave de pareamento devolvida pela TV (LG, Samsung). */
+    val token: String? = null,
+    val name: String = "TV",
+)
+
+@Serializable
+enum class TvBrand(val label: String, val needsPairing: Boolean) {
+    LG("LG (webOS)", true),
+    SAMSUNG("Samsung (Tizen)", true),
+    ROKU("Roku / Roku TV", false),
+}
+
+@Serializable
+data class LegacyTvConfig(
     val host: String,
     val mac: String = "",
     val clientKey: String? = null,
-    val name: String = "TV LG",
+    val name: String = "TV",
 )
 
 @Serializable

@@ -1,4 +1,4 @@
-package dev.micio.casa.integrations.lg
+package dev.micio.casa.integrations.tv
 
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.add

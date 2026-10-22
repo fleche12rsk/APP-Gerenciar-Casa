@@ -58,7 +58,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.withContext
 
-/** Controles virtuais do hub infravermelho Intelbras (Tuya): ar-condicionado, TV box, som... */
+/** Controles virtuais de hubs infravermelho Smart Life/Tuya: ar-condicionado, TV box, som... */
 @Composable
 fun RemotesScreen(vm: MainViewModel, onOpenSettings: () -> Unit) {
     val providers by vm.home.providers.collectAsState()
@@ -70,7 +70,7 @@ fun RemotesScreen(vm: MainViewModel, onOpenSettings: () -> Unit) {
             EmptyState(
                 icon = Icons.Rounded.SettingsRemote,
                 title = "Controle infravermelho",
-                message = "O controle IR da Intelbras funciona pela nuvem Smart Life/Tuya. Conecte a conta em Ajustes para usar os controles aqui.",
+                message = "Hubs infravermelho do Smart Life/Tuya funcionam pela nuvem. Conecte a conta em Ajustes para usar os controles aqui.",
             ) {
                 Button(onClick = onOpenSettings, colors = ButtonDefaults.buttonColors(containerColor = Palette.Ivory, contentColor = Palette.Ink)) {
                     Text("Conectar Smart Life")

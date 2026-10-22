@@ -5,7 +5,7 @@ enum class DeviceKind { LIGHT, SWITCH, OUTLET, FAN, COVER, VACUUM, TV, SPEAKER, 
 enum class Source(val label: String) {
     TUYA("Smart Life / Tuya"),
     HOME_ASSISTANT("Home Assistant"),
-    LG("TV LG"),
+    TV("TVs"),
     CAMERA("Câmeras"),
 }
 

@@ -1,4 +1,4 @@
-package dev.micio.casa.integrations.lg
+package dev.micio.casa.integrations.tv
 
 import dev.micio.casa.integrations.IntegrationException
 import kotlinx.cinterop.ExperimentalForeignApi

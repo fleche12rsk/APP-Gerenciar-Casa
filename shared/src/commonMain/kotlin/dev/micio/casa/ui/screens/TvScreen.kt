@@ -36,7 +36,7 @@ import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material.icons.rounded.Remove
-import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.SettingsInputHdmi
 import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material.icons.rounded.TvOff
 import androidx.compose.material.icons.automirrored.rounded.VolumeOff
@@ -52,6 +52,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -68,10 +70,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.collectAsState
-import dev.micio.casa.integrations.lg.LgTvProvider
-import dev.micio.casa.integrations.lg.TvApp
-import dev.micio.casa.integrations.lg.TvInput
-import dev.micio.casa.integrations.lg.WebOsClient
+import dev.micio.casa.integrations.tv.TvApp
+import dev.micio.casa.integrations.tv.TvConnection
+import dev.micio.casa.integrations.tv.TvController
+import dev.micio.casa.integrations.tv.TvInput
+import dev.micio.casa.integrations.tv.TvKey
+import dev.micio.casa.integrations.tv.TvProvider
 import dev.micio.casa.model.DeviceAction
 import dev.micio.casa.model.Source
 import dev.micio.casa.ui.MainViewModel
@@ -85,105 +89,134 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.withContext
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TvScreen(vm: MainViewModel, wide: Boolean, onOpenSettings: () -> Unit) {
     val providers by vm.home.providers.collectAsState()
     val config by vm.config.config.collectAsState()
-    val tv = (providers[Source.LG] as? LgTvProvider)?.tv
+    val controllers = (providers[Source.TV] as? TvProvider)?.controllers.orEmpty()
+    val tvs = config.tvs.filter { it.id in controllers }
+    var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
+    val selected = tvs.firstOrNull { it.id == selectedId } ?: tvs.firstOrNull()
 
-    if (tv == null) {
+    if (selected == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             EmptyState(
                 icon = Icons.Rounded.Tv,
-                title = "Conecte a sua TV LG",
-                message = "Informe o IP da TV em Ajustes. O controle funciona pela rede local, sem depender da nuvem.",
+                title = "Conecte a sua TV",
+                message = "TVs LG, Samsung e Roku são controladas direto pela rede de casa. Outras marcas entram pelo Home Assistant ou pelo controle infravermelho.",
             ) {
                 Button(onClick = onOpenSettings, colors = ButtonDefaults.buttonColors(containerColor = Palette.Ivory, contentColor = Palette.Ink)) {
-                    Text("Configurar TV")
+                    Text("Adicionar TV")
                 }
             }
         }
         return
     }
+    val tv = controllers.getValue(selected.id)
 
-    val state by tv.state.collectAsState()
-    val connected = state == WebOsClient.State.CONNECTED
-    val name = config.tv?.name ?: "TV LG"
-    val run: (suspend WebOsClient.() -> Unit) -> Unit = { block -> vm.home.launchAction("A TV não respondeu.") { tv.block() } }
+    val state by tv.connection.collectAsState()
+    val connected = state == TvConnection.CONNECTED
+    val run: (suspend TvController.() -> Unit) -> Unit = { block -> vm.home.launchAction("A TV não respondeu.") { tv.block() } }
 
     val power: () -> Unit = {
-        vm.home.allDevices.value.firstOrNull { it.id == LgTvProvider.DEVICE_ID }?.let {
+        vm.home.allDevices.value.firstOrNull { it.id == TvProvider.deviceId(selected.id) }?.let {
             vm.home.execute(it, DeviceAction.Power(!connected))
         }
     }
 
     val hPad = if (wide) 32.dp else 16.dp
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = hPad, vertical = 24.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(name, style = MaterialTheme.typography.headlineMedium, color = Palette.Ivory)
-                AnimatedContent(state, label = "tvState") { s ->
-                    Text(
-                        when (s) {
-                            WebOsClient.State.CONNECTED -> "Conectada"
-                            WebOsClient.State.CONNECTING -> "Conectando…"
-                            WebOsClient.State.WAITING_APPROVAL -> "Aceite o pedido que apareceu na TV"
-                            WebOsClient.State.DISCONNECTED -> if (tv.clientKey == null) "Ainda não pareada" else "Desligada ou fora da rede"
-                        },
-                        color = if (s == WebOsClient.State.WAITING_APPROVAL) Palette.Ember else Palette.Mist,
+        if (tvs.size > 1) {
+            FlowRow(
+                Modifier.padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                tvs.forEach { item ->
+                    FilterChip(
+                        selected = item.id == selected.id,
+                        onClick = { selectedId = item.id },
+                        label = { Text(item.name) },
+                        shape = RoundedCornerShape(50),
+                        colors = FilterChipDefaults.filterChipColors(
+                            containerColor = Palette.GlassFill,
+                            labelColor = Palette.Ivory,
+                            selectedContainerColor = Palette.Ivory,
+                            selectedLabelColor = Palette.Ink,
+                        ),
+                        border = null,
                     )
                 }
             }
-            if (!connected && state != WebOsClient.State.CONNECTING && state != WebOsClient.State.WAITING_APPROVAL) {
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(selected.name, style = MaterialTheme.typography.headlineMedium, color = Palette.Ivory)
+                AnimatedContent(state, label = "tvState") { s ->
+                    Text(
+                        when (s) {
+                            TvConnection.CONNECTED -> "Conectada · ${selected.brand.label}"
+                            TvConnection.CONNECTING -> "Conectando…"
+                            TvConnection.WAITING_APPROVAL -> "Aceite o pedido que apareceu na TV"
+                            TvConnection.DISCONNECTED -> if (!tv.paired) "Ainda não autorizada" else "Desligada ou fora da rede"
+                        },
+                        color = if (s == TvConnection.WAITING_APPROVAL) Palette.Ember else Palette.Mist,
+                    )
+                }
+            }
+            if (!connected && state != TvConnection.CONNECTING && state != TvConnection.WAITING_APPROVAL) {
                 Button(
                     onClick = { run { connect() } },
                     colors = ButtonDefaults.buttonColors(containerColor = Palette.GlassFill, contentColor = Palette.Ivory),
                     modifier = Modifier.padding(end = 12.dp),
-                ) { Text(if (tv.clientKey == null) "Parear" else "Conectar") }
+                ) { Text(if (!tv.paired) "Autorizar" else "Conectar") }
             }
             RoundKey(Icons.Rounded.PowerSettingsNew, if (connected) "Desligar TV" else "Ligar TV", size = 56.dp, tint = if (connected) Palette.Coral else Palette.Sage, onClick = power)
         }
 
         Spacer(Modifier.height(24.dp))
 
-        if (wide) {
-            Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                RemotePad(tv, connected, run, Modifier.widthIn(max = 380.dp))
-                Column(Modifier.weight(1f)) { TvContent(tv, connected, run) }
+        key(selected.id) {
+            if (wide) {
+                Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                    RemotePad(tv, connected, run, Modifier.widthIn(max = 380.dp))
+                    Column(Modifier.weight(1f)) { TvContent(tv, connected, run) }
+                }
+            } else {
+                RemotePad(tv, connected, run, Modifier.fillMaxWidth())
+                TvContent(tv, connected, run)
             }
-        } else {
-            RemotePad(tv, connected, run, Modifier.fillMaxWidth())
-            TvContent(tv, connected, run)
         }
     }
 }
 
 @Composable
-private fun RemotePad(tv: WebOsClient, connected: Boolean, run: (suspend WebOsClient.() -> Unit) -> Unit, modifier: Modifier) {
+private fun RemotePad(tv: TvController, connected: Boolean, run: (suspend TvController.() -> Unit) -> Unit, modifier: Modifier) {
     val volume by tv.volume.collectAsState()
     LaunchedEffect(connected) { if (connected) withContext(Dispatchers.IO) { runCatching { tv.refreshVolume() } } }
 
     GlassCard(modifier) {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-            DPad(enabled = connected) { button -> run { button(button) } }
+            DPad(enabled = connected) { key -> run { press(key) } }
             Spacer(Modifier.height(20.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                RoundKey(Icons.AutoMirrored.Rounded.ArrowBack, "Voltar", enabled = connected) { run { button("BACK") } }
-                RoundKey(Icons.Rounded.Home, "Início", enabled = connected) { run { button("HOME") } }
-                RoundKey(Icons.Rounded.Menu, "Menu", enabled = connected) { run { button("MENU") } }
-                RoundKey(Icons.Rounded.Settings, "Configurações rápidas", enabled = connected) { run { button("QMENU") } }
+                RoundKey(Icons.AutoMirrored.Rounded.ArrowBack, "Voltar", enabled = connected) { run { press(TvKey.BACK) } }
+                RoundKey(Icons.Rounded.Home, "Início", enabled = connected) { run { press(TvKey.HOME) } }
+                RoundKey(Icons.Rounded.Menu, "Menu", enabled = connected) { run { press(TvKey.MENU) } }
+                RoundKey(Icons.Rounded.SettingsInputHdmi, "Entrada", enabled = connected) { run { press(TvKey.INPUT) } }
             }
             Spacer(Modifier.height(20.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(28.dp), verticalAlignment = Alignment.CenterVertically) {
-                RockerKey("VOL", connected, onUp = { run { volumeUp() } }, onDown = { run { volumeDown() } })
+                RockerKey("VOL", connected, onUp = { run { press(TvKey.VOLUME_UP) } }, onDown = { run { press(TvKey.VOLUME_DOWN) } })
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    RoundKey(Icons.AutoMirrored.Rounded.VolumeOff, "Silenciar", enabled = connected) { run { setMute(true) } }
+                    RoundKey(Icons.AutoMirrored.Rounded.VolumeOff, "Silenciar", enabled = connected) { run { press(TvKey.MUTE) } }
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        RoundKey(Icons.Rounded.PlayArrow, "Reproduzir", enabled = connected) { run { play() } }
-                        RoundKey(Icons.Rounded.Pause, "Pausar", enabled = connected) { run { pause() } }
+                        RoundKey(Icons.Rounded.PlayArrow, "Reproduzir", enabled = connected) { run { press(TvKey.PLAY) } }
+                        RoundKey(Icons.Rounded.Pause, "Pausar", enabled = connected) { run { press(TvKey.PAUSE) } }
                     }
                 }
-                RockerKey("CH", connected, onUp = { run { channelUp() } }, onDown = { run { channelDown() } })
+                RockerKey("CH", connected, onUp = { run { press(TvKey.CHANNEL_UP) } }, onDown = { run { press(TvKey.CHANNEL_DOWN) } })
             }
             volume?.let { current ->
                 var slider by remember(current) { mutableFloatStateOf(current.toFloat()) }
@@ -204,7 +237,7 @@ private fun RemotePad(tv: WebOsClient, connected: Boolean, run: (suspend WebOsCl
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun TvContent(tv: WebOsClient, connected: Boolean, run: (suspend WebOsClient.() -> Unit) -> Unit) {
+private fun TvContent(tv: TvController, connected: Boolean, run: (suspend TvController.() -> Unit) -> Unit) {
     var apps by remember { mutableStateOf<List<TvApp>>(emptyList()) }
     var inputs by remember { mutableStateOf<List<TvInput>>(emptyList()) }
     LaunchedEffect(connected) {
@@ -220,7 +253,7 @@ private fun TvContent(tv: WebOsClient, connected: Boolean, run: (suspend WebOsCl
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Icon(Icons.Rounded.TvOff, contentDescription = null, tint = Palette.Mist)
                 Text(
-                    "Com a TV ligada e conectada, os seus apps e entradas HDMI aparecem aqui.",
+                    "Com a TV ligada e conectada, os apps e as entradas dela aparecem aqui.",
                     color = Palette.Mist,
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -268,7 +301,9 @@ private fun AppTile(app: TvApp, onClick: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(Modifier.size(56.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = 0.06f)), contentAlignment = Alignment.Center) {
+            // Sem ícone (Samsung não informa), mostra a inicial do app.
             app.icon?.let { RemoteImage(it, Modifier.size(48.dp)) }
+                ?: Text(app.title.take(1).uppercase(), color = Palette.Ivory, style = MaterialTheme.typography.titleLarge)
         }
         Text(
             app.title,
@@ -283,7 +318,7 @@ private fun AppTile(app: TvApp, onClick: () -> Unit) {
 }
 
 @Composable
-private fun DPad(enabled: Boolean, onButton: (String) -> Unit) {
+private fun DPad(enabled: Boolean, onButton: (TvKey) -> Unit) {
     Box(
         Modifier
             .size(220.dp)
@@ -291,10 +326,10 @@ private fun DPad(enabled: Boolean, onButton: (String) -> Unit) {
             .background(Color.White.copy(alpha = 0.05f))
             .border(1.dp, Palette.GlassLine, CircleShape),
     ) {
-        PadArrow(Icons.Rounded.KeyboardArrowUp, "Cima", enabled, Modifier.align(Alignment.TopCenter)) { onButton("UP") }
-        PadArrow(Icons.Rounded.KeyboardArrowDown, "Baixo", enabled, Modifier.align(Alignment.BottomCenter)) { onButton("DOWN") }
-        PadArrow(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, "Esquerda", enabled, Modifier.align(Alignment.CenterStart)) { onButton("LEFT") }
-        PadArrow(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Direita", enabled, Modifier.align(Alignment.CenterEnd)) { onButton("RIGHT") }
+        PadArrow(Icons.Rounded.KeyboardArrowUp, "Cima", enabled, Modifier.align(Alignment.TopCenter)) { onButton(TvKey.UP) }
+        PadArrow(Icons.Rounded.KeyboardArrowDown, "Baixo", enabled, Modifier.align(Alignment.BottomCenter)) { onButton(TvKey.DOWN) }
+        PadArrow(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, "Esquerda", enabled, Modifier.align(Alignment.CenterStart)) { onButton(TvKey.LEFT) }
+        PadArrow(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Direita", enabled, Modifier.align(Alignment.CenterEnd)) { onButton(TvKey.RIGHT) }
         val interaction = remember { MutableInteractionSource() }
         val scale = pressScale(interaction)
         Box(
@@ -304,7 +339,7 @@ private fun DPad(enabled: Boolean, onButton: (String) -> Unit) {
                 .graphicsLayer { scaleX = scale; scaleY = scale }
                 .clip(CircleShape)
                 .background(Palette.Ivory.copy(alpha = if (enabled) 1f else 0.3f))
-                .clickable(enabled = enabled, interactionSource = interaction, indication = null, role = Role.Button, onClickLabel = "OK") { onButton("ENTER") },
+                .clickable(enabled = enabled, interactionSource = interaction, indication = null, role = Role.Button, onClickLabel = "OK") { onButton(TvKey.OK) },
             contentAlignment = Alignment.Center,
         ) {
             Text("OK", color = Palette.Ink, style = MaterialTheme.typography.titleMedium)

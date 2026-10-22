@@ -107,7 +107,7 @@ private fun CasaRoot(vm: MainViewModel, wide: Boolean) {
 
     val openDevice: (Device) -> Unit = { device ->
         when {
-            device.kind == DeviceKind.TV && device.source == Source.LG -> destination = Destination.TV
+            device.kind == DeviceKind.TV && device.source == Source.TV -> destination = Destination.TV
             device.kind == DeviceKind.CAMERA -> destination = Destination.CAMERAS
             else -> sheetDeviceId = device.id
         }

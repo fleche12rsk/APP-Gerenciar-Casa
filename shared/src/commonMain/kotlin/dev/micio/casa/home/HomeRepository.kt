@@ -7,8 +7,8 @@ import dev.micio.casa.integrations.DeviceProvider
 import dev.micio.casa.integrations.ProviderSnapshot
 import dev.micio.casa.integrations.camera.CameraProvider
 import dev.micio.casa.integrations.ha.HomeAssistantProvider
-import dev.micio.casa.integrations.lg.LgTvProvider
-import dev.micio.casa.integrations.lg.WebOsClient
+import dev.micio.casa.integrations.tv.TvController
+import dev.micio.casa.integrations.tv.TvProvider
 import dev.micio.casa.integrations.tuya.TuyaProvider
 import dev.micio.casa.model.Device
 import dev.micio.casa.model.DeviceAction
@@ -59,7 +59,7 @@ class HomeRepository(
 
     val tuya get() = _providers.value[Source.TUYA] as? TuyaProvider
     val homeAssistant get() = _providers.value[Source.HOME_ASSISTANT] as? HomeAssistantProvider
-    val tv: WebOsClient? get() = (_providers.value[Source.LG] as? LgTvProvider)?.tv
+    val tvs: Map<String, TvController> get() = (_providers.value[Source.TV] as? TvProvider)?.controllers.orEmpty()
 
     /** Todos os aparelhos, já com nome/cômodo/favorito personalizados. */
     val allDevices: StateFlow<List<Device>> = combine(snapshots, configRepo.config) { snaps, config ->
@@ -79,17 +79,18 @@ class HomeRepository(
         watch(Source.TUYA, { it.tuya }) { config -> config?.let(::TuyaProvider) }
         watch(Source.HOME_ASSISTANT, { it.homeAssistant?.copy(alexaEntity = null) }) { config -> config?.let(::HomeAssistantProvider) }
         watch(Source.CAMERA, { it.cameras }) { cameras -> cameras.takeIf { it.isNotEmpty() }?.let(::CameraProvider) }
-        watch(Source.LG, { config -> config.tv?.let { it.host to it.mac } }) { key ->
-            (_providers.value[Source.LG] as? LgTvProvider)?.tv?.close()
-            val initial = configRepo.current.tv
-            if (key == null || initial == null) null
-            else LgTvProvider(
-                settings = { configRepo.current.tv ?: initial },
-                tv = WebOsClient(
-                    host = initial.host,
-                    clientKey = initial.clientKey,
-                    onClientKey = { newKey -> configRepo.update { c -> c.copy(tv = c.tv?.copy(clientKey = newKey)) } },
-                ),
+        // Só marca, endereço e id recriam as conexões; nome, MAC e token mudam sem derrubá-las.
+        watch(Source.TV, { config -> config.tvs.map { Triple(it.id, it.brand, it.host) } }) { keys ->
+            (_providers.value[Source.TV] as? TvProvider)?.close()
+            val tvs = configRepo.current.tvs
+            if (keys.isEmpty()) null
+            else TvProvider(
+                settings = { configRepo.current.tvs },
+                controllers = tvs.associate { tv ->
+                    tv.id to TvProvider.controllerFor(tv) { token ->
+                        configRepo.update { c -> c.copy(tvs = c.tvs.map { if (it.id == tv.id) it.copy(token = token) else it }) }
+                    }
+                },
             )
         }
     }
